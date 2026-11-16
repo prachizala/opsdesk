@@ -4,10 +4,10 @@ import io
 import json
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, Depends, HTTPException, Query, Header, status
+from fastapi import FastAPI, Depends, HTTPException, Query, Header, Request, Response, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, defer
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, text
 
 from backend.app.database import get_db
 from backend.app.models import (
@@ -34,7 +34,14 @@ from backend.services.routing_engine import (
 from backend.services.intent_classifier import suggest_ticket_intent
 
 import os
+import time
+import logging
+import threading
+from collections import defaultdict
 from fastapi.middleware.cors import CORSMiddleware
+
+logger = logging.getLogger("opsdesk.access")
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(
     title="OpsDesk: B2B Travel Operations Case Management API",
@@ -52,6 +59,50 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+RATE_LIMIT_PER_MINUTE = int(os.environ.get("RATE_LIMIT_PER_MINUTE", "120"))
+RATE_LIMIT_WINDOW = 60.0  # seconds
+
+_rate_limit_lock = threading.Lock()
+_rate_limit_records: Dict[str, List[float]] = defaultdict(list)
+
+@app.middleware("http")
+async def opsdesk_protection_middleware(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    start_time = time.time()
+
+    # Rate limiting check (in-process token bucket / sliding window)
+    # Note: Redis distributed rate limiter is scheduled for multi-worker production.
+    if request.url.path not in ["/health", "/ready", "/docs", "/openapi.json"]:
+        identifier = request.headers.get("X-User-Id") or (request.client.host if request.client else "unknown")
+        now = time.time()
+        with _rate_limit_lock:
+            window_start = now - RATE_LIMIT_WINDOW
+            timestamps = [t for t in _rate_limit_records[identifier] if t > window_start]
+            if len(timestamps) >= RATE_LIMIT_PER_MINUTE:
+                _rate_limit_records[identifier] = timestamps
+                logger.warning(f'{{"event": "rate_limited", "identifier": "{identifier}", "request_id": "{request_id}", "path": "{request.url.path}"}}')
+                resp = Response(
+                    content=json.dumps({"detail": "Rate limit exceeded. Please retry later."}),
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    media_type="application/json",
+                    headers={"Retry-After": "60", "X-Request-ID": request_id}
+                )
+                return resp
+            timestamps.append(now)
+            _rate_limit_records[identifier] = timestamps
+
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        duration_ms = (time.time() - start_time) * 1000
+        logger.error(f'{{"event": "request_error", "request_id": "{request_id}", "method": "{request.method}", "path": "{request.url.path}", "duration_ms": {duration_ms:.2f}, "error": "{str(exc)}"}}')
+        raise exc
+
+    duration_ms = (time.time() - start_time) * 1000
+    response.headers["X-Request-ID"] = request_id
+    logger.info(f'{{"event": "request_completed", "request_id": "{request_id}", "method": "{request.method}", "path": "{request.url.path}", "status_code": {response.status_code}, "duration_ms": {duration_ms:.2f}}}')
+    return response
 
 # Allowed status transitions graph. Any invalid transition yields 409 Conflict.
 ALLOWED_STATUS_TRANSITIONS: Dict[str, List[str]] = {
@@ -71,6 +122,19 @@ ALLOWED_STATUS_TRANSITIONS: Dict[str, List[str]] = {
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "service": "opsdesk-backend"}
+
+
+@app.get("/ready")
+def readiness_check(db: Session = Depends(get_db)):
+    """Readiness probe checking database connectivity via SELECT 1."""
+    try:
+        db.execute(text("SELECT 1"))
+        return {"status": "ready", "database": "connected"}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Service unavailable: Database probe failed ({str(exc)})"
+        )
 
 
 @app.post("/api/ai/suggest-intent", response_model=IntentSuggestResponseSchema)
@@ -1255,6 +1319,10 @@ def sanitize_csv_cell(val: Any) -> str:
     return s
 
 
+CSV_EXPORT_MAX_CONCURRENCY = int(os.environ.get("CSV_EXPORT_MAX_CONCURRENCY", "2"))
+_export_semaphore = threading.BoundedSemaphore(CSV_EXPORT_MAX_CONCURRENCY)
+
+
 @app.get("/api/export/tickets.csv")
 def export_tickets_csv(
     status: Optional[str] = None,
@@ -1268,9 +1336,18 @@ def export_tickets_csv(
     Uncapped CSV data streaming export for ops beyond 3K-row UX barrier (MVP-6).
     Restricted strictly to Lead role. Memory-safe streaming via generator yield_per.
     Applies formula injection sanitization to protect operations spreadsheets.
+    Protected by concurrency limiter (max CSV_EXPORT_MAX_CONCURRENCY, default 2).
     """
     if current_user.role != "Lead":
         raise HTTPException(status_code=403, detail="Forbidden: Export is restricted to Lead role")
+
+    acquired = _export_semaphore.acquire(blocking=False)
+    if not acquired:
+        raise HTTPException(
+            status_code=503,
+            detail="Export service busy: maximum concurrent exports reached. Please retry shortly.",
+            headers={"Retry-After": "10"}
+        )
 
     query = db.query(Ticket)
     if status:
@@ -1285,36 +1362,42 @@ def export_tickets_csv(
     query = query.order_by(Ticket.created_at.desc())
 
     def iter_csv():
-        output = io.StringIO()
-        writer = csv.writer(output)
+        try:
+            output = io.StringIO()
+            writer = csv.writer(output)
 
-        # Write header
-        writer.writerow([
-            "id", "tboh_id", "agency_id", "title", "intent", "priority",
-            "status", "check_in_date", "lcd_date", "assigned_to", "created_at"
-        ])
-        yield output.getvalue()
-        output.seek(0)
-        output.truncate(0)
-
-        # Stream rows in chunks of 500 without loading all rows into RAM
-        for ticket in query.yield_per(500):
+            # Write header
             writer.writerow([
-                sanitize_csv_cell(ticket.id),
-                sanitize_csv_cell(ticket.tboh_id),
-                sanitize_csv_cell(ticket.agency_id),
-                sanitize_csv_cell(ticket.title),
-                sanitize_csv_cell(ticket.intent or ""),
-                sanitize_csv_cell(ticket.priority),
-                sanitize_csv_cell(ticket.status),
-                sanitize_csv_cell(ticket.check_in_date.isoformat() if ticket.check_in_date else ""),
-                sanitize_csv_cell(ticket.lcd_date.isoformat() if ticket.lcd_date else ""),
-                sanitize_csv_cell(ticket.assigned_to or ""),
-                sanitize_csv_cell(ticket.created_at.isoformat() if ticket.created_at else "")
+                "id", "tboh_id", "agency_id", "title", "intent", "priority",
+                "status", "check_in_date", "lcd_date", "assigned_to", "created_at"
             ])
             yield output.getvalue()
             output.seek(0)
             output.truncate(0)
+
+            # Stream rows in chunks of 500 without loading all rows into RAM
+            for ticket in query.yield_per(500):
+                writer.writerow([
+                    sanitize_csv_cell(ticket.id),
+                    sanitize_csv_cell(ticket.tboh_id),
+                    sanitize_csv_cell(ticket.agency_id),
+                    sanitize_csv_cell(ticket.title),
+                    sanitize_csv_cell(ticket.intent or ""),
+                    sanitize_csv_cell(ticket.priority),
+                    sanitize_csv_cell(ticket.status),
+                    sanitize_csv_cell(ticket.check_in_date.isoformat() if ticket.check_in_date else ""),
+                    sanitize_csv_cell(ticket.lcd_date.isoformat() if ticket.lcd_date else ""),
+                    sanitize_csv_cell(ticket.assigned_to or ""),
+                    sanitize_csv_cell(ticket.created_at.isoformat() if ticket.created_at else "")
+                ])
+                yield output.getvalue()
+                output.seek(0)
+                output.truncate(0)
+        finally:
+            try:
+                _export_semaphore.release()
+            except ValueError:
+                pass
 
     headers = {
         "Content-Disposition": "attachment; filename=opsdesk_tickets_export.csv",

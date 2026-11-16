@@ -1764,6 +1764,107 @@ def test_idempotent_ticket_creation(client: TestClient, db_session: Session):
     assert len(tickets) == 1
 
 
+def test_readiness_probe_returns_200(client: TestClient):
+    """Step 5.4: GET /ready executes SELECT 1 and returns 200 ready."""
+    resp = client.get("/ready")
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ready", "database": "connected"}
+
+
+def test_request_id_injected_in_response(client: TestClient):
+    """Step 5.4: X-Request-ID is generated and returned, or preserved if provided."""
+    # Auto-generated
+    resp1 = client.get("/health")
+    assert "x-request-id" in resp1.headers or "X-Request-ID" in resp1.headers
+    req_id1 = resp1.headers.get("x-request-id") or resp1.headers.get("X-Request-ID")
+    assert len(req_id1) > 0
+
+    # Custom supplied
+    custom_id = "test-trace-999"
+    resp2 = client.get("/health", headers={"X-Request-ID": custom_id})
+    req_id2 = resp2.headers.get("x-request-id") or resp2.headers.get("X-Request-ID")
+    assert req_id2 == custom_id
+
+
+def test_rate_limiter_middleware_blocks_with_429(client: TestClient, monkeypatch):
+    """Step 5.1: In-process rate limiter returns 429 and Retry-After when threshold exceeded."""
+    from backend.app import main as main_module
+    # Temporarily set limit to 5 requests per minute for a dedicated test user
+    monkeypatch.setattr(main_module, "RATE_LIMIT_PER_MINUTE", 5)
+    test_user_id = f"USR-RATELIMIT-{uuid.uuid4()}"
+
+    for i in range(5):
+        resp = client.get("/api/tickets?view=triage", headers={"X-User-Id": test_user_id})
+        # Could be 200 or 401/403, but not 429
+        assert resp.status_code != 429
+
+    # 6th request must trigger 429 Too Many Requests
+    resp_blocked = client.get("/api/tickets?view=triage", headers={"X-User-Id": test_user_id})
+    assert resp_blocked.status_code == 429
+    assert "Retry-After" in resp_blocked.headers or "retry-after" in resp_blocked.headers
+    assert "Rate limit exceeded" in resp_blocked.json()["detail"]
+
+
+def test_csv_export_concurrency_limiter_503(client: TestClient, monkeypatch):
+    """Step 5.2: Concurrency limiter returns 503 when maximum concurrent exports reached."""
+    from backend.app import main as main_module
+    # Exhaust the semaphore
+    acquired = main_module._export_semaphore.acquire(blocking=False)
+    # Acquire until fully exhausted
+    acquired_count = 1 if acquired else 0
+    while main_module._export_semaphore.acquire(blocking=False):
+        acquired_count += 1
+
+    try:
+        # Request should now fail with 503 Service Unavailable
+        resp = client.get("/api/export/tickets.csv", headers={"X-User-Id": "USR-104"})
+        assert resp.status_code == 503
+        assert "busy" in resp.json()["detail"].lower()
+    finally:
+        for _ in range(acquired_count):
+            try:
+                main_module._export_semaphore.release()
+            except ValueError:
+                pass
+
+
+def test_gemini_timeout_fallback(monkeypatch):
+    """Step 5.3: Gemini call timeout falls back safely to regex or Unclassified."""
+    import time
+    from backend.services.intent_classifier import suggest_ticket_intent
+
+    # Set dummy API key to reach Gemini branch
+    monkeypatch.setenv("GEMINI_API_KEY", "dummy-test-key")
+    # Set timeout to 0.1s
+    monkeypatch.setenv("GEMINI_TIMEOUT_SECONDS", "0.1")
+
+    # Mock genai client to simulate a slow or hanging call
+    class HangingClient:
+        def __init__(self, *args, **kwargs):
+            self.models = self
+
+        def generate_content(self, *args, **kwargs):
+            time.sleep(1.0)
+            return None
+
+    import sys
+    class MockGenaiModule:
+        Client = HangingClient
+        types = type("Types", (), {"GenerateContentConfig": lambda **kwargs: None})
+
+    monkeypatch.setitem(sys.modules, "google.genai", MockGenaiModule)
+
+    # Call with text that has no regex match (to force Gemini path)
+    t0 = time.perf_counter()
+    intent, source = suggest_ticket_intent("General inquiry", "Hello, do you have any updates on my request?")
+    elapsed = time.perf_counter() - t0
+
+    assert intent == "Unclassified"
+    assert source == "fallback_unclassified"
+    assert elapsed < 0.8, f"Gemini timeout took too long: {elapsed:.2f}s"
+
+
+
 
 
 
