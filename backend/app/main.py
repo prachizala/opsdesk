@@ -2,6 +2,7 @@ import uuid
 import csv
 import io
 import json
+import hashlib
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, Depends, HTTPException, Query, Header, Request, Response, status
@@ -61,36 +62,67 @@ app.add_middleware(
 )
 
 RATE_LIMIT_PER_MINUTE = int(os.environ.get("RATE_LIMIT_PER_MINUTE", "120"))
+RATE_LIMIT_MAX_KEYS = int(os.environ.get("RATE_LIMIT_MAX_KEYS", "10000"))
 RATE_LIMIT_WINDOW = 60.0  # seconds
 
 _rate_limit_lock = threading.Lock()
-_rate_limit_records: Dict[str, List[float]] = defaultdict(list)
+_rate_limit_records: Dict[str, List[float]] = {}
 
 @app.middleware("http")
 async def opsdesk_protection_middleware(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
     start_time = time.time()
 
-    # Rate limiting check (in-process token bucket / sliding window)
-    # Note: Redis distributed rate limiter is scheduled for multi-worker production.
+    # Rate limiting check: Keyed on both X-User-Id and client IP
+    # NOTE: Behind a reverse proxy (e.g. Nginx, Cloudflare), request.client.host represents the proxy IP
+    # unless trusted proxy forwarding (e.g. X-Forwarded-For with CIDR verification) is configured.
+    # Status: planned trusted proxy config, not built.
     if request.url.path not in ["/health", "/ready", "/docs", "/openapi.json"]:
-        identifier = request.headers.get("X-User-Id") or (request.client.host if request.client else "unknown")
+        user_id = request.headers.get("X-User-Id")
+        client_ip = request.client.host if request.client else "unknown"
+
+        keys_to_check = []
+        if user_id:
+            keys_to_check.append(f"user:{user_id}")
+        if client_ip:
+            keys_to_check.append(f"ip:{client_ip}")
+
         now = time.time()
+        window_start = now - RATE_LIMIT_WINDOW
+
         with _rate_limit_lock:
-            window_start = now - RATE_LIMIT_WINDOW
-            timestamps = [t for t in _rate_limit_records[identifier] if t > window_start]
-            if len(timestamps) >= RATE_LIMIT_PER_MINUTE:
-                _rate_limit_records[identifier] = timestamps
-                logger.warning(f'{{"event": "rate_limited", "identifier": "{identifier}", "request_id": "{request_id}", "path": "{request.url.path}"}}')
-                resp = Response(
-                    content=json.dumps({"detail": "Rate limit exceeded. Please retry later."}),
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    media_type="application/json",
-                    headers={"Retry-After": "60", "X-Request-ID": request_id}
-                )
-                return resp
-            timestamps.append(now)
-            _rate_limit_records[identifier] = timestamps
+            # 1. Check if any key violates limit
+            for key in keys_to_check:
+                existing = _rate_limit_records.get(key, [])
+                active = [t for t in existing if t > window_start]
+                if len(active) >= RATE_LIMIT_PER_MINUTE:
+                    _rate_limit_records[key] = active
+                    logger.warning(f'{{"event": "rate_limited", "key": "{key}", "request_id": "{request_id}", "path": "{request.url.path}"}}')
+                    resp = Response(
+                        content=json.dumps({"detail": "Rate limit exceeded. Please retry later."}),
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        media_type="application/json",
+                        headers={"Retry-After": "60", "X-Request-ID": request_id}
+                    )
+                    return resp
+
+            # 2. Bounded dict eviction: remove stale keys if size exceeds max bound
+            if len(_rate_limit_records) >= RATE_LIMIT_MAX_KEYS:
+                stale_keys = [k for k, v in _rate_limit_records.items() if not v or v[-1] <= window_start]
+                for k in stale_keys:
+                    del _rate_limit_records[k]
+                if len(_rate_limit_records) >= RATE_LIMIT_MAX_KEYS:
+                    # Drop oldest 10% of entries if still at capacity
+                    sorted_keys = sorted(_rate_limit_records.keys(), key=lambda k: _rate_limit_records[k][-1] if _rate_limit_records[k] else 0)
+                    for k in sorted_keys[: max(1, len(_rate_limit_records) // 10)]:
+                        del _rate_limit_records[k]
+
+            # 3. Append current timestamp to all applicable keys
+            for key in keys_to_check:
+                existing = _rate_limit_records.get(key, [])
+                active = [t for t in existing if t > window_start]
+                active.append(now)
+                _rate_limit_records[key] = active
 
     try:
         response = await call_next(request)
@@ -330,10 +362,17 @@ def create_ticket(
     6. Idempotent request deduplication via Idempotency-Key header.
     """
     # 0. Check idempotency cache
+    # Assumption: In-database SQLite idempotency records are retained indefinitely; in production 24h Redis TTL is used.
+    current_payload_hash = hashlib.sha256(payload.model_dump_json().encode("utf-8")).hexdigest()
     if idempotency_key:
         record_id = f"{current_user.id}:{idempotency_key}"
         existing_record = db.query(IdempotencyRecord).filter(IdempotencyRecord.id == record_id).first()
         if existing_record:
+            if existing_record.request_hash and existing_record.request_hash != current_payload_hash:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Conflict: Idempotency-Key was already used with a different request payload."
+                )
             return json.loads(existing_record.response_json)
 
     # 1. Strict agency determination
@@ -458,7 +497,8 @@ def create_ticket(
             user_id=current_user.id,
             key=idempotency_key,
             ticket_id=new_ticket.id,
-            response_json=json.dumps(response_data)
+            response_json=json.dumps(response_data),
+            request_hash=current_payload_hash
         )
         db.add(idem_entry)
 
@@ -1320,6 +1360,7 @@ def sanitize_csv_cell(val: Any) -> str:
 
 
 CSV_EXPORT_MAX_CONCURRENCY = int(os.environ.get("CSV_EXPORT_MAX_CONCURRENCY", "2"))
+CSV_EXPORT_MAX_DURATION_SECONDS = float(os.environ.get("CSV_EXPORT_MAX_DURATION_SECONDS", "30.0"))
 _export_semaphore = threading.BoundedSemaphore(CSV_EXPORT_MAX_CONCURRENCY)
 
 
@@ -1362,6 +1403,7 @@ def export_tickets_csv(
     query = query.order_by(Ticket.created_at.desc())
 
     def iter_csv():
+        start_time = time.time()
         try:
             output = io.StringIO()
             writer = csv.writer(output)
@@ -1377,6 +1419,11 @@ def export_tickets_csv(
 
             # Stream rows in chunks of 500 without loading all rows into RAM
             for ticket in query.yield_per(500):
+                if time.time() - start_time > CSV_EXPORT_MAX_DURATION_SECONDS:
+                    writer.writerow(["# [ABORTED: Export exceeded maximum duration limit]"])
+                    yield output.getvalue()
+                    break
+
                 writer.writerow([
                     sanitize_csv_cell(ticket.id),
                     sanitize_csv_cell(ticket.tboh_id),

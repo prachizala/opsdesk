@@ -271,12 +271,19 @@ async def main():
         try:
             r = await client.get("/ready")
             if r.status_code != 200:
-                print(f"Warning: /ready returned HTTP {r.status_code}: {r.text}")
-        except Exception as e:
-            print(f"Error connecting to server at {args.base_url}: {e}")
-            sys.exit(1)
+                r = await client.get("/health")
+        except Exception:
+            try:
+                r = await client.get("/health")
+            except Exception as e:
+                print(f"Error connecting to server at {args.base_url}: {e}")
+                sys.exit(1)
 
-    print(f"Target server {args.base_url} is ready. Starting benchmark scenarios...")
+    import os
+    rate_limit_env = os.environ.get("RATE_LIMIT_PER_MINUTE", "120 (default)")
+    print(f"Target server {args.base_url} is ready.")
+    print(f"RATE_LIMIT_PER_MINUTE environment setting: {rate_limit_env}")
+    print("Starting benchmark scenarios...")
 
     s1 = await runner.scenario_read_heavy(total_requests=150, concurrency=15)
     s2 = await runner.scenario_mixed_read_write(iterations=30, concurrency=10)
