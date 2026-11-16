@@ -9,22 +9,43 @@ OpsDesk replaces fragmented ticketing in travel operations with context-linked c
 - **Transfer-Proof Supplier Threads:** Decouples supplier conversation recipients from assigned agents, preserving threads across transfers.
 - **Uncapped Ops Data Path:** Eliminates artificial 3,000-row export barriers via direct database streaming.
 
-> **Note on Demo Fixtures:** In demo fixtures TCK-1004 and TCK-1006, the Last Cancellation Date (LCD) is intentionally placed equal to or after the check-in date so that guest check-in proximity directly acts as the controlling urgency factor.
+> **Note on Demo Fixtures:** In demo fixtures TCK-1004, TCK-1006, and TCK-1007, the Last Cancellation Date (LCD) is intentionally placed equal to or after the check-in date so that guest check-in proximity directly acts as the controlling urgency factor.
 
 ---
 
-## MVP Implementation Status (TBO Problem Statement Alignment)
-The implementation directly maps to the requirements specified in the problem statement (*Zendesk-Darwin box Automation.pdf*, pages 1–7):
+## MVP Implementation Status (Mapped to PDF Pages 5–6)
+This checklist strictly tracks the requirements specified in *Zendesk-Darwin box Automation.pdf* (Pages 5–6):
 
-| Feature / MVP | Problem Statement Requirement | Status | Implementation Details |
+| MVP # & Name | Source (PDF Page) | Specification & Core Bullets | Status | Implementation Details |
+|---|---|---|---|---|
+| **MVP-1 · Context-rich tickets** | Page 5 | • Create tickets with title, description, agency identity, TBOH, priority, category/intent, travel fields (check-in/LCD)<br>• Link tickets by TBOH, agency, and/or intent without third-party apps<br>• Intent taxonomy: manual select + rule auto-suggest / lightweight ML<br>• Status flow: New → Open → Pending → Escalated → Resolved → Closed<br>• Activity timeline: status, assignment, links, escalations | **Backend implemented, UI pending** | Implemented in `backend/app/main.py` (`POST /api/tickets`, `GET /api/tickets/{id}`, intent classifier, and atomic `audit_logs`). Next.js 15 UI pending Milestone 2+. |
+| **MVP-2 · Routing & ownership** | Page 5 | • Assign / reassign / unassign with clear ownership<br>• Beyond FIFO/LIFO: region/country desk match + time window + priority score + availability<br>• Views: triage (unassigned), my queue, by region, by intent, linked-case view<br>• Audit reason explaining why ticket was routed | **Backend implemented, UI pending** | Implemented in `backend/services/routing_engine.py` (Tier-1 regional workload routing + Tier-2 dynamic queue scoring) and `GET /api/tickets` views. Queue UI pending. |
+| **MVP-3 · Side conversations** | Page 5 | • Side-conversation threads with explicit recipient lists (decoupled from assignee)<br>• Recipients stay correct and preserved after agent transfer<br>• Distinguish internal notes (`InternalNote`) vs external replies (`PublicReply`) | **Backend implemented, UI pending** | Implemented in `backend/app/main.py` (`/side-threads` endpoints, `/messages` endpoint, and `POST /api/tickets/{id}/transfer`). Thread viewer UI pending. |
+| **MVP-4 · Travel-aware SLA & escalation** | Page 6 | • Dynamic SLA countdown using priority + check-in / LCD proximity<br>• At-risk / breached indicators on queue<br>• Escalate to Escalation Manager as a first-class action (reassigns to manager queue, logs on timeline) | **Backend implemented, UI pending** | Implemented in `backend/services/sla_engine.py` (contract parity via `contracts/golden_vectors.json`) and `POST /api/tickets/{id}/escalate`. Visual SLA badge UI pending. |
+| **MVP-5 · Feedback / insight loop** | Page 6 | • Tag or extract themes (refund delay, supplier lag, cancellation penalty)<br>• Insights view: top themes this week + sample tickets<br>• Optional: suggested link to product / bug<br>• Stretch: AI assist that uses linked history | **Pending** | `TicketTheme` data model and seed fixture mappings created; clustering engine and top themes dashboard scheduled for Milestone 3. |
+| **MVP-6 · Data access for ops** | Page 6 | • Persist tickets across refreshes<br>• Uncapped export / API beyond artificial 3K-row UX barrier<br>• Retention / archival strategy | **Pending** | Durable SQLite/PostgreSQL persistence implemented; standalone Go streaming export daemon and export endpoint scheduled for Milestone 3 (no export endpoint in Milestone 2). |
+| **MVP-7 · Roles & access** | Page 6 | • Requester (agency): own tickets only (internal notes, queue scores, and other agencies' data hidden)<br>• Agent: organization queues<br>• Escalation Manager: escalation queue + managerial actions<br>• Lead: governance & queue health views<br>• Safe demo auth via `X-User-Id` header | **Backend implemented, UI pending** | Implemented in `backend/app/auth.py` and endpoint RBAC guards (401 on missing auth, 403 on cross-tenant access, internal field stripping for Requesters). UI login switcher pending. |
+
+---
+
+## Active FastAPI Endpoints
+Verified against runtime routes in `backend/app/main.py`:
+
+| Method | Path | Access / Role | Description |
 |---|---|---|---|
-| **MVP-1: TBOH Linkage & 360 View** | First-class booking reference grouping without Zendesk add-on fee | **Backend implemented, UI pending** | `TicketLink` model, `GET /api/tickets/{id}/links`, `POST /api/tickets/{id}/links`, and `view=linked` view. Next.js 15 UI pending Milestone 2+. |
-| **MVP-2: Travel-Aware SLA Engine** | Dynamic countdown based on check-in proximity and LCD date | **Backend implemented, UI pending** | `backend/services/sla_engine.py`, verified against `contracts/golden_vectors.json`. Visual SLA countdown badge UI pending. |
-| **MVP-3: 2-Tier Routing Engine** | Tier-1 regional desk assignment + Tier-2 dynamic queue priority | **Backend implemented, UI pending** | `backend/services/routing_engine.py`, MEA/APAC/EUR desks, priority weights. Queue dashboard UI pending. |
-| **MVP-4: Transfer-Proof Supplier Threads** | Side conversation threads preserved across agent handoffs | **Backend implemented, UI pending** | `POST /api/tickets/{id}/transfer`, side conversation recipients decoupled from `assigned_to`. Thread viewer UI pending. |
-| **MVP-5: Proactive Insights & Clustering** | Root cause clustering across tickets sharing suppliers/hotels | **Pending** | Scheduled for Milestone 3 (clustering pipeline & automated theme detection). |
-| **MVP-6: Uncapped Operations Export** | Streaming export overcoming artificial 3,000-row tool barriers | **Pending** | Export endpoint and Go streaming daemon scheduled for Milestone 3 (no export endpoint in Milestone 2). |
-| **MVP-7: AI Intent Classifier** | Intent extraction and smart triage suggestions | **Backend implemented, UI pending** | `backend/services/intent_classifier.py` (regex rules + optional Gemini API fallback). Agent triage composer UI pending. |
+| `POST` | `/api/ai/suggest-intent` | Internal Staff | Suggest intent category using regex heuristic rules or Gemini fallback |
+| `GET` | `/api/tickets` | Requester / Staff | List tickets with SLA & queue score (views: `triage`, `my_queue`, `by_region`, `by_intent`, `linked`) |
+| `POST` | `/api/tickets` | Requester / Staff | Create operations ticket with auto-linkage of shared TBOH references |
+| `GET` | `/api/tickets/{ticket_id}` | Requester / Staff | Full ticket details (internal notes, queue score, and routing reason withheld from Requesters) |
+| `POST` | `/api/tickets/{ticket_id}/assign` | Internal Staff | Assign ticket to internal agent |
+| `POST` | `/api/tickets/{ticket_id}/unassign` | Internal Staff | Unassign ticket |
+| `POST` | `/api/tickets/{ticket_id}/status` | Internal Staff | Transition ticket status in state machine (403 for Requesters, 409 on invalid transition) |
+| `POST` | `/api/tickets/{ticket_id}/escalate` | Internal Staff | Escalate ticket to Escalation Manager with neutral audit routing reason |
+| `POST` | `/api/tickets/{ticket_id}/transfer` | Internal Staff | Transfer ticket preserving all supplier side conversation recipients |
+| `POST` | `/api/tickets/{ticket_id}/messages` | Requester / Staff | Post public reply or internal staff note (`InternalNote` forbidden for Requesters) |
+| `GET` | `/api/tickets/{ticket_id}/side-threads` | Internal Staff | List supplier side conversations for ticket (403 for Requesters) |
+| `POST` | `/api/tickets/{ticket_id}/side-threads` | Internal Staff | Create supplier side conversation with explicit recipient email list |
+| `POST` | `/api/tickets/{ticket_id}/side-threads/{id}/messages` | Internal Staff | Post message to supplier side conversation |
 
 ---
 
