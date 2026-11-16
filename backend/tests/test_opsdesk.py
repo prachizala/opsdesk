@@ -12,7 +12,8 @@ from sqlalchemy.orm import sessionmaker, Session
 from backend.app.database import Base, get_db
 from backend.app.models import (
     Agency, User, Ticket, TicketLink, SideConversation,
-    SideConversationRecipient, TicketTheme, EventOutbox, TicketMessage
+    SideConversationRecipient, TicketTheme, EventOutbox, TicketMessage,
+    AuditLog
 )
 from backend.app.main import app
 from backend.services.routing_engine import (
@@ -673,3 +674,195 @@ def test_suggest_intent_endpoint(client: TestClient):
     data = resp.json()
     assert data["intent"] == "Voucher Resend"
     assert data["source"] == "regex_rule"
+
+
+# ============================================================================
+# 8. TRIAGE ORDERING, PRIVACY & FIELD SANITIZATION TESTS
+# ============================================================================
+
+def test_triage_queue_score_global_sorting(client: TestClient, db_session: Session):
+    """
+    view=triage strictly returns unassigned active tickets, sorted globally by queue_score descending.
+    Verifies that:
+    1. First result of page 1 has the global maximum queue_score.
+    2. Page 2 scores are less than or equal to page 1 scores.
+    3. All returned tickets have assigned_to IS NULL.
+    """
+    resp_p1 = client.get("/api/tickets?view=triage&limit=5&offset=0", headers={"X-User-Id": "USR-101"})
+    assert resp_p1.status_code == 200
+    data_p1 = resp_p1.json()
+
+    resp_p2 = client.get("/api/tickets?view=triage&limit=5&offset=5", headers={"X-User-Id": "USR-101"})
+    assert resp_p2.status_code == 200
+    data_p2 = resp_p2.json()
+
+    # All tickets must be unassigned
+    for t in data_p1["tickets"] + data_p2["tickets"]:
+        assert t["assigned_to"] is None
+        assert t["status"] in ["New", "Open", "Pending", "Escalated"]
+
+    p1_scores = [t["queue_score"] for t in data_p1["tickets"]]
+    p2_scores = [t["queue_score"] for t in data_p2["tickets"]]
+
+    # Page 1 scores are in non-increasing order
+    for i in range(len(p1_scores) - 1):
+        assert p1_scores[i] >= p1_scores[i + 1]
+
+    # Page 2 scores are in non-increasing order
+    for i in range(len(p2_scores) - 1):
+        assert p2_scores[i] >= p2_scores[i + 1]
+
+    # Page 2 maximum score <= Page 1 minimum score
+    assert min(p1_scores) >= max(p2_scores)
+
+    # First ticket on page 1 must match the global maximum queue_score
+    now = datetime.utcnow()
+    all_unassigned = db_session.query(Ticket).filter(
+        Ticket.status.in_(["New", "Open", "Pending", "Escalated"]),
+        Ticket.assigned_to.is_(None)
+    ).all()
+    global_max_score = max(
+        calculate_queue_score_tier2(t.priority, t.check_in_date, now=now)
+        for t in all_unassigned
+    )
+    assert abs(data_p1["tickets"][0]["queue_score"] - global_max_score) < 0.01
+
+def test_requester_response_omits_internal_fields(client: TestClient):
+    """
+    Requesters viewing ticket list and detail must NEVER see internal fields:
+    routing_reason, queue_score, and assigned_to are set to None.
+    """
+    # 1. Requester lists tickets
+    list_resp = client.get("/api/tickets", headers={"X-User-Id": "USR-201"})
+    assert list_resp.status_code == 200
+    for t in list_resp.json()["tickets"]:
+        assert t["routing_reason"] is None
+        assert t["queue_score"] is None
+        assert t["assigned_to"] is None
+
+    # 2. Requester views ticket detail
+    detail_resp = client.get("/api/tickets/TCK-1004", headers={"X-User-Id": "USR-201"})
+    assert detail_resp.status_code == 200
+    detail = detail_resp.json()
+    assert detail["routing_reason"] is None
+    assert detail["queue_score"] is None
+    assert detail["assigned_to"] is None
+
+def test_escalate_and_transfer_routing_reason_neutral_text(client: TestClient, db_session: Session):
+    """
+    Escalate and transfer endpoints must NEVER write free-text reason into ticket.routing_reason.
+    ticket.routing_reason must contain only neutral, non-sensitive audit text.
+    Free-text reason is strictly confined to audit_logs.
+    """
+    # 1. Escalate
+    secret_escalate_reason = "CONFIDENTIAL_ESCALATE_LEGAL_RISK_12345"
+    esc_resp = client.post(
+        "/api/tickets/TCK-1004/escalate",
+        json={"reason": secret_escalate_reason},
+        headers={"X-User-Id": "USR-101"}
+    )
+    assert esc_resp.status_code == 200
+    esc_data = esc_resp.json()
+    assert esc_data["routing_reason"] == "Escalated to Escalation Manager (USR-103)"
+    assert secret_escalate_reason not in esc_data["routing_reason"]
+
+    # Verify audit log contains the reason
+    audit_esc = db_session.query(AuditLog).filter(
+        AuditLog.ticket_id == "TCK-1004",
+        AuditLog.action == "ticket.escalated"
+    ).order_by(AuditLog.created_at.desc()).first()
+    assert audit_esc is not None
+    esc_details = json.loads(audit_esc.details) if isinstance(audit_esc.details, str) else audit_esc.details
+    assert secret_escalate_reason in esc_details.get("reason", "")
+
+    # 2. Transfer (using TCK-1006 which is assigned to USR-101)
+    secret_transfer_reason = "CONFIDENTIAL_SHIFT_HANDOVER_REASON_67890"
+    trans_resp = client.post(
+        "/api/tickets/TCK-1006/transfer",
+        json={"target_agent_id": "USR-102", "reason": secret_transfer_reason},
+        headers={"X-User-Id": "USR-101"}
+    )
+    assert trans_resp.status_code == 200
+    trans_data = trans_resp.json()
+    assert trans_data["routing_reason"] == "Transferred from USR-101 to USR-102"
+    assert secret_transfer_reason not in trans_data["routing_reason"]
+
+    # Verify audit log contains the reason
+    audit_trans = db_session.query(AuditLog).filter(
+        AuditLog.ticket_id == "TCK-1006",
+        AuditLog.action == "ticket.transferred"
+    ).order_by(AuditLog.created_at.desc()).first()
+    assert audit_trans is not None
+    trans_details = json.loads(audit_trans.details) if isinstance(audit_trans.details, str) else audit_trans.details
+    assert secret_transfer_reason in trans_details.get("reason", "")
+
+def test_requester_detail_linked_tickets_scoped_to_own_agency(client: TestClient, db_session: Session):
+    """
+    Requesters viewing ticket details must only see linked tickets that belong to their own agency.
+    Cross-agency links are visible to internal staff but withheld from Requesters.
+    """
+    now = datetime.utcnow()
+    # Create ticket in AGY-001
+    t1 = Ticket(
+        id="TCK-CROSS-1",
+        tboh_id="TBOH-CROSS",
+        agency_id="AGY-001",
+        title="AGY-001 Ticket",
+        description="Ticket in agency 1",
+        intent="General Operations Inquiry",
+        priority="Medium",
+        status="Open",
+        check_in_date=now + timedelta(days=2),
+        lcd_date=now + timedelta(days=2),
+        created_at=now
+    )
+    # Create ticket in AGY-002
+    t2 = Ticket(
+        id="TCK-CROSS-2",
+        tboh_id="TBOH-CROSS",
+        agency_id="AGY-002",
+        title="AGY-002 Ticket",
+        description="Ticket in agency 2",
+        intent="General Operations Inquiry",
+        priority="Medium",
+        status="Open",
+        check_in_date=now + timedelta(days=2),
+        lcd_date=now + timedelta(days=2),
+        created_at=now
+    )
+    db_session.add_all([t1, t2])
+    db_session.commit()
+
+    # Link t1 and t2
+    link = TicketLink(id="LNK-CROSS", ticket_id="TCK-CROSS-1", linked_ticket_id="TCK-CROSS-2", link_reason="Cross-agency link")
+    db_session.add(link)
+    db_session.commit()
+
+    # Requester from AGY-001 views TCK-CROSS-1
+    req_resp = client.get("/api/tickets/TCK-CROSS-1", headers={"X-User-Id": "USR-201"})
+    assert req_resp.status_code == 200
+    assert "TCK-CROSS-2" not in req_resp.json()["linked_ticket_ids"]
+
+    # Staff views TCK-CROSS-1 and sees the cross-agency link
+    staff_resp = client.get("/api/tickets/TCK-CROSS-1", headers={"X-User-Id": "USR-101"})
+    assert staff_resp.status_code == 200
+    assert "TCK-CROSS-2" in staff_resp.json()["linked_ticket_ids"]
+
+def test_staff_create_ticket_without_agency_id_returns_400(client: TestClient):
+    """
+    Internal staff creating a ticket without specifying agency_id receives 400 Bad Request.
+    The previous default to 'AGY-001' has been strictly removed.
+    """
+    now = datetime.utcnow()
+    payload = {
+        "title": "Staff Missing Agency Ticket",
+        "description": "Internal staff ticket creation attempt without specifying agency_id",
+        "tboh_id": "TBOH-88990",
+        "priority": "Medium",
+        "check_in_date": (now + timedelta(days=3)).isoformat(),
+        "lcd_date": (now + timedelta(days=3)).isoformat(),
+        "agency_id": None
+    }
+    resp = client.post("/api/tickets", json=payload, headers={"X-User-Id": "USR-101"})
+    assert resp.status_code == 400
+    assert "agency_id is required" in resp.json()["detail"]

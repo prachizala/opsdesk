@@ -2,7 +2,7 @@ import random
 from datetime import datetime, timedelta
 from faker import Faker
 from sqlalchemy.orm import Session
-from backend.app.database import engine as default_engine, Base, SessionLocal
+from backend.app.database import Base, SessionLocal
 from backend.app.models import (
     Agency, User, Ticket, TicketLink, TicketMessage,
     SideConversation, SideConversationRecipient, SideConversationMessage,
@@ -30,14 +30,14 @@ def seed_database(db: Session, engine_bind=None, total_tickets: int = 5000):
     - Standard assigned queue tickets are strictly restricted to Tier-1 desk agents: USR-101 and USR-102.
     - Workload and assignments for Journey fixtures are dynamically computed via select_agent_tier1.
     """
-    target_engine = engine_bind if engine_bind is not None else default_engine
+    target_bind = engine_bind if engine_bind is not None else db.get_bind()
     fake = Faker()
     Faker.seed(42)
     random.seed(42)
 
-    # Recreate tables cleanly
-    Base.metadata.drop_all(bind=target_engine)
-    Base.metadata.create_all(bind=target_engine)
+    # Recreate tables cleanly using the active database bind (never touches global engine if passed a test session)
+    Base.metadata.drop_all(bind=target_bind)
+    Base.metadata.create_all(bind=target_bind)
 
     print("Creating agencies...")
     agencies = [

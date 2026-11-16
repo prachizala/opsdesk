@@ -18,13 +18,13 @@ The implementation directly maps to the requirements specified in the problem st
 
 | Feature / MVP | Problem Statement Requirement | Status | Implementation Details |
 |---|---|---|---|
-| **MVP-1: TBOH Linkage & 360 View** | First-class booking reference grouping without Zendesk add-on fee | **Implemented** | `TicketLink` model, `GET /api/tickets/{id}/links`, `POST /api/tickets/{id}/links`, and `view=linked` view. |
-| **MVP-2: Travel-Aware SLA Engine** | Dynamic countdown based on check-in proximity and LCD date | **Implemented** | `backend/services/sla_engine.py`, verified against `contracts/golden_vectors.json`. |
-| **MVP-3: 2-Tier Routing Engine** | Tier-1 regional desk assignment + Tier-2 dynamic queue priority | **Implemented** | `backend/services/routing_engine.py`, MEA/APAC/EUR desks, priority weights. |
-| **MVP-4: Transfer-Proof Supplier Threads** | Side conversation threads preserved across agent handoffs | **Implemented** | `POST /api/tickets/{id}/transfer`, side conversation recipients decoupled from `assigned_to`. |
+| **MVP-1: TBOH Linkage & 360 View** | First-class booking reference grouping without Zendesk add-on fee | **Backend implemented, UI pending** | `TicketLink` model, `GET /api/tickets/{id}/links`, `POST /api/tickets/{id}/links`, and `view=linked` view. Next.js 15 UI pending Milestone 2+. |
+| **MVP-2: Travel-Aware SLA Engine** | Dynamic countdown based on check-in proximity and LCD date | **Backend implemented, UI pending** | `backend/services/sla_engine.py`, verified against `contracts/golden_vectors.json`. Visual SLA countdown badge UI pending. |
+| **MVP-3: 2-Tier Routing Engine** | Tier-1 regional desk assignment + Tier-2 dynamic queue priority | **Backend implemented, UI pending** | `backend/services/routing_engine.py`, MEA/APAC/EUR desks, priority weights. Queue dashboard UI pending. |
+| **MVP-4: Transfer-Proof Supplier Threads** | Side conversation threads preserved across agent handoffs | **Backend implemented, UI pending** | `POST /api/tickets/{id}/transfer`, side conversation recipients decoupled from `assigned_to`. Thread viewer UI pending. |
 | **MVP-5: Proactive Insights & Clustering** | Root cause clustering across tickets sharing suppliers/hotels | **Pending** | Scheduled for Milestone 3 (clustering pipeline & automated theme detection). |
-| **MVP-6: Uncapped Operations Export** | Streaming export overcoming artificial 3,000-row tool barriers | **Partial** | FastAPI chunked streaming fallback implemented (`GET /api/export/tickets.csv`); standalone Go daemon pending Milestone 3. |
-| **MVP-7: AI Intent Classifier** | Intent extraction and smart triage suggestions | **Implemented** | `backend/services/intent_classifier.py` (regex rules + optional Gemini API fallback). |
+| **MVP-6: Uncapped Operations Export** | Streaming export overcoming artificial 3,000-row tool barriers | **Pending** | Export endpoint and Go streaming daemon scheduled for Milestone 3 (no export endpoint in Milestone 2). |
+| **MVP-7: AI Intent Classifier** | Intent extraction and smart triage suggestions | **Backend implemented, UI pending** | `backend/services/intent_classifier.py` (regex rules + optional Gemini API fallback). Agent triage composer UI pending. |
 
 ---
 
