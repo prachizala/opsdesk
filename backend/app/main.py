@@ -153,6 +153,8 @@ def list_tickets(
             queue_score = calculate_queue_score_tier2(
                 priority=t.priority,
                 check_in_date=t.check_in_date,
+                lcd_date=t.lcd_date,
+                intent=t.intent,
                 now=now
             )
             scored_tickets.append((queue_score, sla, t))
@@ -200,6 +202,8 @@ def list_tickets(
             queue_score = calculate_queue_score_tier2(
                 priority=t.priority,
                 check_in_date=t.check_in_date,
+                lcd_date=t.lcd_date,
+                intent=t.intent,
                 now=now
             )
             results.append({
@@ -430,6 +434,8 @@ def get_ticket_details(
     queue_score = calculate_queue_score_tier2(
         priority=ticket.priority,
         check_in_date=ticket.check_in_date,
+        lcd_date=ticket.lcd_date,
+        intent=ticket.intent,
         now=now
     )
 

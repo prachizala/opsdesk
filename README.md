@@ -68,9 +68,16 @@ Because travel SLA countdowns and triage queue scores evaluate dynamically relat
 python backend/seed/seed_data.py --reset
 ```
 This recalibrates the key demonstration fixtures relative to execution time:
-- **`TCK-1004` (Journey B):** Emergency check-in assist (~2.5h to check-in, Urgent, AT_RISK Amber)
-- **`TCK-1006` (Journey D):** Imminent check-in assist (~45min to check-in, Urgent, AT_RISK Amber)
-- **`TCK-1007` (Journey B Unassigned):** Unassigned triage emergency (~2.25h to check-in, Urgent, AT_RISK Amber, #1 in Triage Queue)
+
+| Ticket ID | Journey Mapping | PDF p7 Status | Intent | Priority | Status | Urgency / Deadlines | Expected SLA | Queue Position |
+|---|---|---|---|---|---|---|---|---|
+| **`TCK-1001`** | Journey A | Verified (PDF p7) | Refund Request | High | Closed | Check-in -14d, LCD -16d | STOPPED (Gray) | Closed (n/a) |
+| **`TCK-1002`** | Journey A | Verified (PDF p7) | Refund Request | Medium | Closed | Check-in -4d, LCD -6d | STOPPED (Gray) | Closed (n/a) |
+| **`TCK-1004`** | Journey B | Verified (PDF p7) | Emergency Check-in Assist | Urgent | Open | Check-in ~2.5h, LCD None | AT_RISK (Amber) | Assigned USR-101 |
+| **`TCK-1005`** | Journey C | Verified (PDF p7) | Bedding / Room Preference | Medium | Open | Check-in +3d, LCD None | NORMAL (Green) | Assigned USR-101 (Side Convo) |
+| **`TCK-1006`** | Journey D | Verified (PDF p7) | Emergency Check-in Assist | Urgent | Open | Check-in ~45m, LCD None | AT_RISK (Amber) | Assigned USR-101 |
+| **`TCK-1007`** | Journey B (Unassigned) | Verified (PDF p7) | Emergency Check-in Assist | Urgent | New | Check-in ~2.25h, LCD None | AT_RISK (Amber) | **#1 in Triage Queue** (Score 1800.0) |
+| **`TCK-1008`** | Demo Fixture (Refund LCD) | **UNVERIFIED** (PDF p7 letter unverified) | Refund Request | High | Open | Check-in +5d, LCD ~3.0h | **AT_RISK (Amber)** (via LCD) | Assigned USR-101 (Score 1300.0) |
 
 ---
 

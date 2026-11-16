@@ -201,14 +201,42 @@ def seed_database(db: Session, engine_bind=None, total_tickets: int = 5000, drop
     db.add(tck_1007)
     db.commit()
 
-    fixture_tickets = [tck_1001, tck_1002, tck_1004, tck_1005, tck_1006, tck_1007]
+    # Journey Fixture TCK-1008: Refund Request with imminent LCD cancellation deadline (3h LCD, 5d check-in)
+    workload_1008 = compute_agent_workload("USR-101")
+    tck_1008_checkin = now + timedelta(days=5)
+    tck_1008_lcd = now + timedelta(hours=3)
+    tck_1008 = Ticket(
+        id="TCK-1008",
+        tboh_id="TBOH-89104",
+        agency_id="AGY-001",
+        title="Urgent refund request before cancellation deadline",
+        description="Supplier cancellation penalty applies in 3 hours. Guest cannot travel; refund requested before LCD expires.",
+        intent="Refund Request",
+        priority="High",
+        status="Open",
+        check_in_date=tck_1008_checkin,
+        lcd_date=tck_1008_lcd,
+        assigned_to="USR-101",
+        routing_reason=f"Assigned to Aisha Khan [Tier-1 Rule: Region=MEA match, Availability=True, Workload={workload_1008} active cases]",
+        created_at=now - timedelta(minutes=20)
+    )
+    db.add(tck_1008)
+    db.commit()
 
-    # Link TCK-1001 and TCK-1002
+    fixture_tickets = [tck_1001, tck_1002, tck_1004, tck_1005, tck_1006, tck_1007, tck_1008]
+
+    # Link TCK-1001 and TCK-1002 (Shared TBOH-89104) and link TCK-1008 to TCK-1001
     db.add(TicketLink(
         id="LNK-001",
         ticket_id="TCK-1001",
         linked_ticket_id="TCK-1002",
         link_reason="Shared TBOH: TBOH-89104"
+    ))
+    db.add(TicketLink(
+        id="LNK-002",
+        ticket_id="TCK-1008",
+        linked_ticket_id="TCK-1001",
+        link_reason="Shared TBOH: TBOH-89104 (Prior cancelled refund)"
     ))
 
     # Add Side Conversation with explicit recipients for TCK-1005

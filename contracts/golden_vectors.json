@@ -623,7 +623,9 @@
       "input": {
         "priority": "Urgent",
         "check_in_date": "2026-11-16T13:00:00Z",
-        "now": "2026-11-16T12:00:00Z"
+        "now": "2026-11-16T12:00:00Z",
+        "lcd_date": null,
+        "intent": "Refund Request"
       },
       "expected_output": {
         "score": 3000.0
@@ -635,7 +637,9 @@
       "input": {
         "priority": "Urgent",
         "check_in_date": "2026-11-16T14:00:00Z",
-        "now": "2026-11-16T12:00:00Z"
+        "now": "2026-11-16T12:00:00Z",
+        "lcd_date": null,
+        "intent": "Refund Request"
       },
       "expected_output": {
         "score": 3000.0
@@ -647,7 +651,9 @@
       "input": {
         "priority": "Urgent",
         "check_in_date": "2026-11-16T17:00:00Z",
-        "now": "2026-11-16T12:00:00Z"
+        "now": "2026-11-16T12:00:00Z",
+        "lcd_date": null,
+        "intent": "Refund Request"
       },
       "expected_output": {
         "score": 1800.0
@@ -659,7 +665,9 @@
       "input": {
         "priority": "Urgent",
         "check_in_date": "2026-11-16T18:00:00Z",
-        "now": "2026-11-16T12:00:00Z"
+        "now": "2026-11-16T12:00:00Z",
+        "lcd_date": null,
+        "intent": "Refund Request"
       },
       "expected_output": {
         "score": 1800.0
@@ -671,7 +679,9 @@
       "input": {
         "priority": "Urgent",
         "check_in_date": "2026-11-16T18:06:00Z",
-        "now": "2026-11-16T12:00:00Z"
+        "now": "2026-11-16T12:00:00Z",
+        "lcd_date": null,
+        "intent": "Refund Request"
       },
       "expected_output": {
         "score": 1300.0
@@ -683,7 +693,9 @@
       "input": {
         "priority": "Urgent",
         "check_in_date": "2026-11-17T08:00:00Z",
-        "now": "2026-11-16T12:00:00Z"
+        "now": "2026-11-16T12:00:00Z",
+        "lcd_date": null,
+        "intent": "Refund Request"
       },
       "expected_output": {
         "score": 1300.0
@@ -695,7 +707,9 @@
       "input": {
         "priority": "Urgent",
         "check_in_date": "2026-11-17T12:00:00Z",
-        "now": "2026-11-16T12:00:00Z"
+        "now": "2026-11-16T12:00:00Z",
+        "lcd_date": null,
+        "intent": "Refund Request"
       },
       "expected_output": {
         "score": 1300.0
@@ -707,7 +721,9 @@
       "input": {
         "priority": "Urgent",
         "check_in_date": "2026-11-17T12:06:00Z",
-        "now": "2026-11-16T12:00:00Z"
+        "now": "2026-11-16T12:00:00Z",
+        "lcd_date": null,
+        "intent": "Refund Request"
       },
       "expected_output": {
         "score": 1000.0
@@ -719,7 +735,9 @@
       "input": {
         "priority": "Urgent",
         "check_in_date": "2026-11-18T12:00:00Z",
-        "now": "2026-11-16T12:00:00Z"
+        "now": "2026-11-16T12:00:00Z",
+        "lcd_date": null,
+        "intent": "Refund Request"
       },
       "expected_output": {
         "score": 1000.0
@@ -731,7 +749,9 @@
       "input": {
         "priority": "High",
         "check_in_date": "2026-11-16T13:30:00Z",
-        "now": "2026-11-16T12:00:00Z"
+        "now": "2026-11-16T12:00:00Z",
+        "lcd_date": null,
+        "intent": "Refund Request"
       },
       "expected_output": {
         "score": 2500.0
@@ -743,7 +763,9 @@
       "input": {
         "priority": "High",
         "check_in_date": "2026-11-16T17:54:00Z",
-        "now": "2026-11-16T12:00:00Z"
+        "now": "2026-11-16T12:00:00Z",
+        "lcd_date": null,
+        "intent": "Refund Request"
       },
       "expected_output": {
         "score": 1300.0
@@ -755,7 +777,9 @@
       "input": {
         "priority": "High",
         "check_in_date": "2026-11-16T18:00:00Z",
-        "now": "2026-11-16T12:00:00Z"
+        "now": "2026-11-16T12:00:00Z",
+        "lcd_date": null,
+        "intent": "Refund Request"
       },
       "expected_output": {
         "score": 1300.0
@@ -767,7 +791,9 @@
       "input": {
         "priority": "High",
         "check_in_date": "2026-11-16T18:06:00Z",
-        "now": "2026-11-16T12:00:00Z"
+        "now": "2026-11-16T12:00:00Z",
+        "lcd_date": null,
+        "intent": "Refund Request"
       },
       "expected_output": {
         "score": 800.0
@@ -779,7 +805,9 @@
       "input": {
         "priority": "High",
         "check_in_date": "2026-11-17T12:00:00Z",
-        "now": "2026-11-16T12:00:00Z"
+        "now": "2026-11-16T12:00:00Z",
+        "lcd_date": null,
+        "intent": "Refund Request"
       },
       "expected_output": {
         "score": 800.0
@@ -791,7 +819,9 @@
       "input": {
         "priority": "High",
         "check_in_date": "2026-11-17T12:06:00Z",
-        "now": "2026-11-16T12:00:00Z"
+        "now": "2026-11-16T12:00:00Z",
+        "lcd_date": null,
+        "intent": "Refund Request"
       },
       "expected_output": {
         "score": 500.0
@@ -803,7 +833,9 @@
       "input": {
         "priority": "Medium",
         "check_in_date": "2026-11-16T12:30:00Z",
-        "now": "2026-11-16T12:00:00Z"
+        "now": "2026-11-16T12:00:00Z",
+        "lcd_date": null,
+        "intent": "Refund Request"
       },
       "expected_output": {
         "score": 2200.0
@@ -815,7 +847,9 @@
       "input": {
         "priority": "Medium",
         "check_in_date": "2026-11-17T00:00:00Z",
-        "now": "2026-11-16T12:00:00Z"
+        "now": "2026-11-16T12:00:00Z",
+        "lcd_date": null,
+        "intent": "Refund Request"
       },
       "expected_output": {
         "score": 500.0
@@ -827,7 +861,9 @@
       "input": {
         "priority": "Medium",
         "check_in_date": "2026-11-19T12:00:00Z",
-        "now": "2026-11-16T12:00:00Z"
+        "now": "2026-11-16T12:00:00Z",
+        "lcd_date": null,
+        "intent": "Refund Request"
       },
       "expected_output": {
         "score": 200.0
@@ -839,7 +875,9 @@
       "input": {
         "priority": "Low",
         "check_in_date": "2026-11-16T14:00:00Z",
-        "now": "2026-11-16T12:00:00Z"
+        "now": "2026-11-16T12:00:00Z",
+        "lcd_date": null,
+        "intent": "Refund Request"
       },
       "expected_output": {
         "score": 2050.0
@@ -851,7 +889,9 @@
       "input": {
         "priority": "Low",
         "check_in_date": "2026-11-16T18:00:00Z",
-        "now": "2026-11-16T12:00:00Z"
+        "now": "2026-11-16T12:00:00Z",
+        "lcd_date": null,
+        "intent": "Refund Request"
       },
       "expected_output": {
         "score": 850.0
@@ -863,7 +903,9 @@
       "input": {
         "priority": "Low",
         "check_in_date": "2026-11-17T12:00:00Z",
-        "now": "2026-11-16T12:00:00Z"
+        "now": "2026-11-16T12:00:00Z",
+        "lcd_date": null,
+        "intent": "Refund Request"
       },
       "expected_output": {
         "score": 350.0
@@ -875,7 +917,9 @@
       "input": {
         "priority": "Low",
         "check_in_date": "2026-11-17T12:06:00Z",
-        "now": "2026-11-16T12:00:00Z"
+        "now": "2026-11-16T12:00:00Z",
+        "lcd_date": null,
+        "intent": "Refund Request"
       },
       "expected_output": {
         "score": 50.0
