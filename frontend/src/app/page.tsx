@@ -429,8 +429,8 @@ export default function QueuePage() {
                     onChange={(e) => setCreateAgency(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-indigo-500 text-xs"
                   >
-                    <option value="AGY-001">Grand Travel Agency (AGY-001)</option>
-                    <option value="AGY-002">Apex Journeys (AGY-002)</option>
+                    <option value="AGY-001">Demo Agency A (fictional) (AGY-001)</option>
+                    <option value="AGY-002">Demo Agency B (fictional) (AGY-002)</option>
                     <option value="AGY-003">Horizon Holidays (AGY-003)</option>
                   </select>
                 </div>

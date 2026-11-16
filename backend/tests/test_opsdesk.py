@@ -415,8 +415,8 @@ def test_auth_unknown_user_401(client: TestClient):
 def test_requester_cannot_access_other_agency_ticket_403(client: TestClient):
     """
     CRITICAL MULTI-TENANT TEST:
-    USR-202 belongs to AGY-002 (Vectora Travel).
-    TCK-1004 belongs to AGY-001 (Krypton Voyages).
+    USR-202 belongs to AGY-002 (Demo Agency B (fictional)).
+    TCK-1004 belongs to AGY-001 (Demo Agency A (fictional)).
     Accessing TCK-1004 must return 403 Forbidden.
     """
     resp = client.get("/api/tickets/TCK-1004", headers={"X-User-Id": "USR-202"})

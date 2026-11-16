@@ -14,8 +14,8 @@ export const DEMO_USERS: DemoUser[] = [
   { id: "USR-102", name: "Rahul Verma", role: "Agent", agencyId: null, region: "APAC", description: "Operations Agent (APAC Desk)" },
   { id: "USR-103", name: "Vikram Joshi", role: "EscalationManager", agencyId: null, region: "Global", description: "Escalation Manager (Global)" },
   { id: "USR-104", name: "Elena Rostova", role: "Lead", agencyId: null, region: "Global", description: "Operations Team Lead (Global)" },
-  { id: "USR-201", name: "Grand Travel Agency", role: "Requester", agencyId: "AGY-001", region: null, description: "B2B Agency Requester (AGY-001)" },
-  { id: "USR-202", name: "Apex Journeys", role: "Requester", agencyId: "AGY-002", region: null, description: "B2B Agency Requester (AGY-002)" },
+  { id: "USR-201", name: "Demo Agency A (fictional)", role: "Requester", agencyId: "AGY-001", region: null, description: "B2B Agency Requester (AGY-001)" },
+  { id: "USR-202", name: "Demo Agency B (fictional)", role: "Requester", agencyId: "AGY-002", region: null, description: "B2B Agency Requester (AGY-002)" },
 ];
 
 export interface SLAStatus {
