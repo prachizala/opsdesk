@@ -57,6 +57,28 @@ uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 Interactive API Documentation: `http://127.0.0.1:8000/docs`
 
+#### Registered API Endpoints (17 Total)
+
+| Method | Path | Function / Responsibility | Access Scope |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/health` | Health probe & service readiness | Public |
+| `POST` | `/api/ai/suggest-intent` | AI intent fallback suggestion (Gemini Flash) | All Authenticated |
+| `GET` | `/api/tickets` | List/filter tickets with dynamic queue scoring & SLA | Agent / Lead (Scoped for Requester) |
+| `POST` | `/api/tickets` | Create ticket with regex intent classification & SLA | All Authenticated |
+| `GET` | `/api/tickets/{ticket_id}` | Full ticket detail, messages, side-threads & TBOH links | Agent / Lead (Scoped for Requester) |
+| `POST` | `/api/tickets/{ticket_id}/assign` | Assign ticket to an operations agent | Agent / EscalationManager / Lead |
+| `POST` | `/api/tickets/{ticket_id}/unassign` | Return ticket to unassigned triage pool | Agent / EscalationManager / Lead |
+| `POST` | `/api/tickets/{ticket_id}/status` | Transition ticket state (Open/Pending/Resolved/Closed) | Agent / EscalationManager / Lead |
+| `POST` | `/api/tickets/{ticket_id}/escalate` | Escalate ticket to Tier-2 escalation queue | Agent / EscalationManager / Lead |
+| `POST` | `/api/tickets/{ticket_id}/transfer` | Transfer ticket across regional/country desks | Agent / EscalationManager / Lead |
+| `POST` | `/api/tickets/{ticket_id}/messages` | Append message (`PublicReply` or `InternalNote`) | All (`InternalNote` staff-only) |
+| `GET` | `/api/tickets/{ticket_id}/side-threads` | List supplier side conversations | Agent / EscalationManager / Lead |
+| `POST` | `/api/tickets/{ticket_id}/side-threads` | Open supplier side thread with decoupled recipient | Agent / EscalationManager / Lead |
+| `POST` | `/api/tickets/{ticket_id}/side-threads/{side_thread_id}/messages` | Append supplier message to existing side thread | Agent / EscalationManager / Lead |
+| `POST` | `/api/tickets/{ticket_id}/link-suggestion` | Confirm or reject TBOH linked case recommendation | Agent / EscalationManager / Lead |
+| `GET` | `/api/insights/themes` | Aggregate top recurring operational issue themes | EscalationManager / Lead |
+| `GET` | `/api/export/tickets.csv` | Stream uncapped operations tickets via chunked cursor | Lead Only |
+
 ### 3. Run Next.js 15 Frontend
 ```powershell
 cd frontend

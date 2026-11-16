@@ -214,6 +214,8 @@ stateDiagram-v2
 
 | Action / Endpoint | Requester (Agency) | Agent (Staff Tier 1) | EscalationManager (Staff Tier 2) | Lead (Leadership) |
 | :--- | :---: | :---: | :---: | :---: |
+| **GET /health** | ✅ Allowed | ✅ Allowed | ✅ Allowed | ✅ Allowed |
+| **POST /api/ai/suggest-intent** | ✅ Allowed | ✅ Allowed | ✅ Allowed | ✅ Allowed |
 | **GET /api/tickets (triage view)** | ❌ 403 Forbidden | ✅ Allowed | ✅ Allowed | ✅ Allowed |
 | **GET /api/tickets (assigned_to_me)** | ❌ 403 Forbidden | ✅ Allowed | ✅ Allowed | ✅ Allowed |
 | **GET /api/tickets (my_tickets)** | ✅ Scoped to own Agency | ✅ Allowed | ✅ Allowed | ✅ Allowed |
@@ -227,6 +229,7 @@ stateDiagram-v2
 | **POST /api/tickets/{id}/messages (PublicReply)** | ✅ Allowed | ✅ Allowed | ✅ Allowed | ✅ Allowed |
 | **POST /api/tickets/{id}/messages (InternalNote)** | ❌ 403 Forbidden | ✅ Allowed | ✅ Allowed | ✅ Allowed |
 | **POST /api/tickets/{id}/side-threads** | ❌ 403 Forbidden | ✅ Allowed | ✅ Allowed | ✅ Allowed |
+| **POST /api/tickets/{id}/side-threads/{side_thread_id}/messages** | ❌ 403 Forbidden | ✅ Allowed | ✅ Allowed | ✅ Allowed |
 | **GET /api/tickets/{id}/side-threads** | ❌ 403 Forbidden | ✅ Allowed | ✅ Allowed | ✅ Allowed |
 | **POST /api/tickets/{id}/link-suggestion** | ❌ 403 Forbidden | ✅ Allowed | ✅ Allowed | ✅ Allowed |
 | **GET /api/insights/themes** | ❌ 403 Forbidden | ❌ 403 Forbidden | ✅ Allowed | ✅ Allowed |
@@ -240,9 +243,9 @@ Sidecars and modular subsystems are configured via environment variables:
 
 | Variable | Values | Default | Active Implementation | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `SLA_ENGINE` | `python` \| `rust` | `python` | Native Python reference | Pure functional calculation of travel SLA deadline and queue priority score. (Rust engine: planned, not built). |
-| `REALTIME` | `off` \| `on` | `off` | SWR / Client Polling (30s) | When `off`, UI uses polling. When `on`, connects to Go SSE gateway reading `events_outbox`. (Go SSE: planned, not built). |
-| `EXPORT` | `fastapi` \| `go` | `fastapi` | FastAPI `StreamingResponse` | Uses SQLAlchemy `yield_per(500)` generator. Tested: 5,000 rows in ~1.32s with zero buffering. (Go daemon: planned, not built). |
+| `SLA_ENGINE` | `python` | `python` | RESERVED (not read by code) | Python reference in `backend/services/sla_engine.py` is the only active implementation. |
+| `REALTIME` | `off` | `off` | RESERVED (not read by code) | 30s SWR polling is the only active implementation. |
+| `EXPORT` | `fastapi` | `fastapi` | RESERVED (not read by code) | FastAPI `StreamingResponse` with `yield_per(500)` is the only active implementation. |
 | `ALLOWED_CORS_ORIGINS` | CSV of origins | `http://localhost:3000` | FastAPI CORSMiddleware | Controls allowed origins for browser AJAX/fetch requests. |
 | `OPSDESK_DEV_DB` | File path | `./opsdesk.db` | SQLite / PostgreSQL | Target connection string or local database file path. |
 

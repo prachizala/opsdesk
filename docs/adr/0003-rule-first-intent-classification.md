@@ -4,7 +4,7 @@
 Accepted
 
 ## Context
-OpsDesk processes high volumes of incoming support tickets from travel agencies. Automated intent tagging is essential for SLA calculation and queue prioritization. However, relying entirely on remote LLM API calls introduces latency (500ms-2000ms), external network failure risks, and non-deterministic classifications for well-known travel patterns.
+OpsDesk processes high volumes of incoming support tickets from travel agencies. Automated intent tagging is essential for SLA calculation and queue prioritization. However, relying entirely on remote LLM API calls introduces network latency (design target / external API latency), external network failure risks, and non-deterministic classifications for well-known travel patterns.
 
 ## Decision
 We implement a **two-stage hybrid intent classification engine**:
@@ -13,5 +13,5 @@ We implement a **two-stage hybrid intent classification engine**:
 3. **Guardrail:** The seeded distribution regulates `Unclassified` tickets to approximately ~5% (below the 15% operational ceiling).
 
 ## Consequences
-- **Positive:** Sub-millisecond classification for 95%+ of routine tickets, zero LLM token cost for standard queries, 100% deterministic SLA assignment.
+- **Positive:** Demo seed is configured so ~4.5% of tickets are Unclassified; classifier latency and accuracy on real traffic are not measured. Zero LLM token cost for standard queries, deterministic rule-based SLA assignment.
 - **Negative:** New travel operational terms require regex pattern maintenance and taxonomy updates.

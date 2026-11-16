@@ -41,7 +41,7 @@ This roadmap outlines the engineering initiatives required to transition OpsDesk
 - **Current State:** Python reference implementation (`services/sla_engine.py` and `services/routing_engine.py`). Tested with 5,000 records.
 - **Target Architecture (Status: Planned, not built):**
   - Rust microservice or PyO3 compiled extension implementing `calculate_queue_score_tier2` and `effective_deadline_hours`.
-  - Sub-millisecond queue scoring over 50,000+ active records.
+  - Sub-millisecond queue scoring over 50,000+ active records (design target / not measured).
   - Validated against existing `contracts/golden_vectors.json`.
 
 ---
