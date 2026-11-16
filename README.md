@@ -1,60 +1,70 @@
 # OpsDesk: B2B Travel Operations Case Management Platform
 
-OpsDesk replaces fragmented ticketing in travel operations with context-linked cases organized around travel reality:
-- **First-Class TBOH Linkage:** Surfaces prior contacts sharing the same TBO Booking Reference (`TBOH_ID`) without third-party add-ons.
-- **Travel-Aware SLA Engine:** Dynamically calculates countdowns based on guest check-in proximity and Last Cancellation Date (LCD).
-- **2-Tier Routing Engine:** 
-  - Tier 1: Emergency bypass for departures within 4 hours.
-  - Tier 2: Continuous multi-factor dynamic queue scoring.
-- **Transfer-Proof Supplier Threads:** Decouples supplier conversation recipients from assigned agents, preserving threads across transfers.
-- **Uncapped Ops Data Path:** Eliminates artificial 3,000-row export barriers via direct database streaming (`yield_per`).
-- **Complete Next.js 15 UI:** Operations queue, thread viewer, role switcher, intent auto-suggest, and analytics dashboard.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Next.js 15](https://img.shields.io/badge/Next.js-15-black?logo=next.js&logoColor=white)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![Tests: 68 Passing](https://img.shields.io/badge/Tests-68%20Passing-brightgreen)](backend/tests/)
+[![Milestone 3](https://img.shields.io/badge/Milestone%203-Complete-success)]()
 
-> **Intent-Aware SLA Rule & LCD Handling:**
-> - `lcd_date` is optional/nullable across Pydantic schemas and database models (`Optional[datetime] = None`).
-> - Urgency deadline is determined by operational intent:
->   - For cancellation-sensitive intents (`Refund Request`, `Cancellation Inconvenience`, `Unclassified`, or unspecified `None`), if `lcd_date` is present, effective deadline is `min(check_in_date, lcd_date)`.
->   - For other operational intents (e.g., `Emergency Check-in Assist`, `Voucher Resend`, `Date Amendment`, `Bedding / Room Preference`), cancellation deadlines are inapplicable and `check_in_date` strictly governs urgency.
-> - In demo fixtures TCK-1004, TCK-1006, and TCK-1007 (check-in assist / voucher resend), `lcd_date` is `None`. Active Refund and Cancellation demo tickets are seeded with future LCDs (`now < lcd <= check_in`).
+**OpsDesk** is a deterministic B2B travel operations dispatcher built to replace fragmented helpdesks with context-linked operational cases aligned with physical travel reality.
+
+Designed specifically for travel consolidators, online travel agencies (OTAs), and corporate travel desks managing thousands of simultaneous bookings, supplier confirmations, and emergency traveler disruptions.
 
 ---
 
-## MVP Implementation Status (Mapped to PDF Pages 5–6)
-This checklist strictly tracks the requirements specified in *Zendesk-Darwin box Automation.pdf* (Pages 5–6):
+## 🌟 Core Value Propositions
 
-| MVP # & Name | Source (PDF Page) | Specification & Core Bullets | Status | Implementation Details |
-|---|---|---|---|---|
-| **MVP-1 · Context-rich tickets** | Page 5 | • Create tickets with title, description, agency identity, TBOH, priority, category/intent, travel fields (check-in/LCD)<br>• Link tickets by TBOH, agency, and/or intent without third-party apps<br>• Intent taxonomy: manual select + rule auto-suggest / lightweight ML<br>• Status flow: New → Open → Pending → Escalated → Resolved → Closed<br>• Activity timeline: status, assignment, links, escalations | **Fully Implemented** | Backend: `POST /api/tickets`, `GET /api/tickets/{id}`, rule classifier, atomic audit logs.<br>Frontend: Create Ticket Modal with Auto-Suggest Intent, Ticket Detail Activity Timeline. |
-| **MVP-2 · Routing & ownership** | Page 5 | • Assign / reassign / unassign with clear ownership<br>• Beyond FIFO/LIFO: region/country desk match + time window + priority score + availability<br>• Views: triage (unassigned), my queue, by region, by intent, linked-case view<br>• Audit reason explaining why ticket was routed | **Fully Implemented** | Backend: Tier-1 emergency bypass + Tier-2 dynamic queue scoring.<br>Frontend: Queue page with Triage, Assigned to Me, and My Tickets tabs, plus search & intent filter. |
-| **MVP-3 · Side conversations** | Page 5 | • Side-conversation threads with explicit recipient lists (decoupled from assignee)<br>• Recipients stay correct and preserved after agent transfer<br>• Distinguish internal notes (`InternalNote`) vs external replies (`PublicReply`) | **Fully Implemented** | Backend: `/side-threads` endpoints, message types, and recipient preservation on transfer.<br>Frontend: Thread toggle (Public Reply vs Internal Note) + Supplier side-thread composer. |
-| **MVP-4 · Travel-aware SLA & escalation** | Page 6 | • Dynamic SLA countdown using priority + check-in / LCD proximity<br>• At-risk / breached indicators on queue<br>• Escalate to Escalation Manager as a first-class action (reassigns to manager queue, logs on timeline) | **Fully Implemented** | Backend: `sla_engine.py` (effective deadline helper) + `POST /api/tickets/{id}/escalate`.<br>Frontend: Visual SLA badges (`NORMAL`, `AT_RISK`, `BREACHED`) with countdowns & escalation action. |
-| **MVP-5 · Feedback / insight loop** | Page 6 | • Tag or extract themes (refund delay, supplier lag, cancellation penalty)<br>• Insights view: top themes this week + sample tickets<br>• Optional: suggested link to product / bug<br>• Stretch: AI assist that uses linked history | **Fully Implemented** | Backend: `GET /api/insights/themes` + `POST /api/tickets/{id}/link-suggestion`.<br>Frontend: `/insights` analytics dashboard showing recurring themes, percentage bars, and sample ticket links. |
-| **MVP-6 · Data access for ops** | Page 6 | • Persist tickets across refreshes<br>• Uncapped export / API beyond artificial 3K-row UX barrier<br>• Retention / archival strategy | **Fully Implemented** | Backend: Memory-safe `yield_per(500)` streaming generator (`GET /api/export/tickets.csv`), tested 5,000 rows in ~1.32s; `docs/DATA_RETENTION.md`.<br>Frontend: "Export CSV (MVP-6)" streaming download button. |
-| **MVP-7 · Roles & access** | Page 6 | • Requester (agency): own tickets only (internal notes, queue scores, and other agencies' data hidden)<br>• Agent: organization queues<br>• Escalation Manager: escalation queue + managerial actions<br>• Lead: governance & queue health views<br>• Demo-only auth: identity is client-supplied, not secure (PDF p6 allows demo auth) | **Fully Implemented** | Backend: RBAC guards with 401/403 responses and internal field stripping.<br>Frontend: Top navigation Role Switcher with visible Demo-Auth banner and route guards. |
+- **First-Class TBOH Linkage:** Instantly correlates past contacts sharing the same TBO Booking Reference (`TBOH_ID`) without requiring manual lookups or external third-party add-ons.
+- **Intent-Aware LCD SLA Engine:** Dynamically calculates countdowns based on guest check-in proximity and Last Cancellation Date (LCD). Distinguishes cancellation-sensitive deadlines from on-the-ground check-in emergencies.
+- **Deterministic 2-Tier Routing Engine:** 
+  - **Tier 1 (Emergency Bypass):** Departures within 4 hours automatically jump to Queue Rank #1 with priority `Urgent` and status `Escalated`.
+  - **Tier 2 (Continuous Scoring):** Continuous multi-factor dynamic scoring factoring base priority, deadline urgency, and agency tier multipliers.
+- **Transfer-Proof Supplier Threads:** Decouples supplier conversation recipients from internal ticket assignees, guaranteeing that external communications remain preserved across agent transfers.
+- **Uncapped Ops Data Path:** Eliminates artificial 3,000-row export barriers via direct SQL database cursor streaming (`yield_per(500)`). Benchmarked at **5,000 rows in ~1.32s**.
+- **Modern Next.js 15 Frontend:** SaaS light theme operations console featuring a real-time Queue, Thread Viewer, Role Switcher with demo auth warning, AI Intent Auto-Suggest, and Operational Insights.
 
 ---
 
-## Quickstart Guide
+## 📋 MVP Implementation Status (Mapped to PDF Pages 5–6)
+
+This matrix strictly maps against the requirements specified in the project specification (*Zendesk-Darwin box Automation.pdf*, Pages 5–6):
+
+| MVP # & Name | Source (PDF Page) | Specification & Core Capabilities | Status | Implementation Reference |
+|---|---|---|:---:|---|
+| **MVP-1 · Context-rich tickets** | Page 5 | • Create tickets with title, description, agency identity, TBOH, priority, category/intent, travel fields (check-in/LCD)<br>• Link tickets by TBOH, agency, and/or intent without third-party apps<br>• Intent taxonomy: manual select + rule auto-suggest / lightweight ML<br>• Status flow: New → Open → Pending → Escalated → Resolved → Closed<br>• Activity timeline: status, assignment, links, escalations | **Fully Implemented** | **Backend:** `POST /api/tickets`, `GET /api/tickets/{id}`, rule classifier, atomic audit logs.<br>**Frontend:** Create Ticket Modal with Auto-Suggest Intent, Ticket Detail Activity Timeline. |
+| **MVP-2 · Routing & ownership** | Page 5 | • Assign / reassign / unassign with clear ownership<br>• Beyond FIFO/LIFO: region/country desk match + time window + priority score + availability<br>• Views: triage (unassigned), my queue, by region, by intent, linked-case view<br>• Audit reason explaining why ticket was routed | **Fully Implemented** | **Backend:** Tier-1 emergency bypass + Tier-2 dynamic queue scoring in `backend/services/routing_engine.py`.<br>**Frontend:** Queue page with Triage, Assigned to Me, and My Tickets tabs, plus search & intent filter. |
+| **MVP-3 · Side conversations** | Page 5 | • Side-conversation threads with explicit recipient lists (decoupled from assignee)<br>• Recipients stay correct and preserved after agent transfer<br>• Distinguish internal notes (`InternalNote`) vs external replies (`PublicReply`) | **Fully Implemented** | **Backend:** `/side-threads` endpoints, message types, and recipient preservation on transfer.<br>**Frontend:** Thread toggle (Public Reply vs Internal Note) + Supplier side-thread composer. |
+| **MVP-4 · Travel-aware SLA & escalation** | Page 6 | • Dynamic SLA countdown using priority + check-in / LCD proximity<br>• At-risk / breached indicators on queue<br>• Escalate to Escalation Manager as a first-class action (reassigns to manager queue, logs on timeline) | **Fully Implemented** | **Backend:** `sla_engine.py` (effective deadline helper) + `POST /api/tickets/{id}/escalate`.<br>**Frontend:** Visual SLA badges (`NORMAL`, `AT_RISK`, `BREACHED`) with live countdowns & escalation action. |
+| **MVP-5 · Feedback / insight loop** | Page 6 | • Tag or extract themes (refund delay, supplier lag, cancellation penalty)<br>• Insights view: top themes this week + sample tickets<br>• Optional: suggested link to product / bug<br>• Stretch: AI assist that uses linked history | **Fully Implemented** | **Backend:** `GET /api/insights/themes` + `POST /api/tickets/{id}/link-suggestion`.<br>**Frontend:** `/insights` analytics dashboard showing recurring themes, percentage bars, and sample ticket links. |
+| **MVP-6 · Data access for ops** | Page 6 | • Persist tickets across refreshes<br>• Uncapped export / API beyond artificial 3K-row UX barrier<br>• Retention / archival strategy | **Fully Implemented** | **Backend:** Memory-safe `yield_per(500)` streaming generator (`GET /api/export/tickets.csv`), tested 5,000 rows in ~1.32s; [`docs/DATA_RETENTION.md`](docs/DATA_RETENTION.md).<br>**Frontend:** "Export CSV (MVP-6)" streaming download button. |
+| **MVP-7 · Roles & access** | Page 6 | • Requester (agency): own tickets only (internal notes, queue scores, and other agencies' data hidden)<br>• Agent: organization queues<br>• Escalation Manager: escalation queue + managerial actions<br>• Lead: governance & queue health views<br>• Demo-only auth: identity is client-supplied, not secure (PDF p6 allows demo auth) | **Fully Implemented** | **Backend:** RBAC guards with 401/403 responses and internal field stripping.<br>**Frontend:** Top navigation Role Switcher with visible Demo-Auth banner and route guards. |
+
+---
+
+## ⚡ Quickstart Guide
 
 ### Prerequisites
-- Python 3.11+
-- Node.js 18+ (tested on Node v24)
-- SQLite3 (included with Python)
+- **Python 3.11+**
+- **Node.js 18+** (tested on Node v24)
+- **SQLite3** (included with standard Python)
 
 ### 1. Database Setup & Seeding
 ```powershell
-# In repository root
+# Reset and calibrate dev database with 5,000 tickets
 python -m backend.seed.seed_data --reset
 ```
-*Seeds the development database (`opsdesk.db`) with 5,000 realistic operations tickets, calibrating Journey fixtures TCK-1001 through TCK-1008.*
+*Seeds the development database (`opsdesk.db`) with 5,000 realistic operations tickets, calibrating Journey fixtures `TCK-1001` through `TCK-1008` relative to wall-clock time.*
 
 ### 2. Run Backend API
 ```powershell
 uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
-API Documentation: `http://127.0.0.1:8000/docs`
+Interactive API Documentation: `http://127.0.0.1:8000/docs`
 
-### 3. Run Frontend UI
+### 3. Run Next.js 15 Frontend
 ```powershell
 cd frontend
 npm install
@@ -64,69 +74,44 @@ Open Browser: `http://localhost:3000`
 
 ---
 
-## Test & Verification Commands
+## 🧪 Test & Verification Commands
 
-All test and verification commands are 100% deterministic and runnable locally:
+All testing suites run with **100% determinism** against isolated test databases without modifying the development database:
 
 ```powershell
-# 1. Backend Unit & Integration Tests (68 passed)
+# 1. Backend Unit & Integration Tests (68 tests passing)
 pytest backend/tests -q
 
-# 2. Frontend ESLint Check
+# 2. Frontend ESLint Check (0 warnings, 0 errors)
 cd frontend ; npm run lint
 
-# 3. Frontend Production Build & Typecheck
+# 3. Frontend Production Build & TypeScript Typecheck (5 pages compiled)
 cd frontend ; npm run build
 
-# 4. Frontend-Backend Contract Integration Smoke Test
+# 4. Frontend-Backend Contract Integration Smoke Test (9/9 checks passed)
 python scripts/smoke_frontend_api.py
+
+# 5. Dev Database Integrity Verification (Proves zero test pollution)
+powershell -ExecutionPolicy Bypass -File scripts\check_dev_db_untouched.ps1
 ```
 
 ---
 
-## Active Environment Variables & Feature Flags
+## 🧭 Monorepo Structure
 
-| Variable | Default | Purpose |
-| :--- | :--- | :--- |
-| `ALLOWED_CORS_ORIGINS` | `http://localhost:3000,http://127.0.0.1:3000` | Origins permitted by FastAPI CORSMiddleware |
-| `OPSDESK_DEV_DB` | `opsdesk.db` | Path or connection string to the SQLite database |
-| `SLA_ENGINE` | `python` | Toggle between Python reference implementation and Rust sidecar (`python` \| `rust`) |
-| `REALTIME` | `off` | Toggle between client-polling and Go SSE sidecar (`off` \| `on`) |
-| `EXPORT` | `fastapi` | Toggle between FastAPI StreamingResponse and Go daemon (`fastapi` \| `go`) |
-| `NEXT_PUBLIC_API_URL` | `http://127.0.0.1:8000` | Frontend backend API target URL |
-
----
-
-## Pre-Demo Wall-Clock Reset & Fixture Calibrations
-
-Because travel SLA countdowns and triage queue scores evaluate dynamically relative to current wall-clock time (`now`), run the reset command immediately prior to a live demonstration to calibrate all Journey fixtures:
-```bash
-python -m backend.seed.seed_data --reset
-```
-
-| Ticket ID | Journey Mapping | PDF p7 Status | Intent | Priority | Status | Urgency / Deadlines | Expected SLA | Queue Position |
-|---|---|---|---|---|---|---|---|---|
-| **`TCK-1001`** | Journey A | Verified (PDF p7) | Refund Request | High | Closed | Check-in -14d, LCD -16d | STOPPED (Gray) | Closed (n/a) |
-| **`TCK-1002`** | Journey A | Verified (PDF p7) | Refund Request | Medium | Closed | Check-in -4d, LCD -6d | STOPPED (Gray) | Closed (n/a) |
-| **`TCK-1004`** | Journey B | Verified (PDF p7) | Emergency Check-in Assist | Urgent | Open | Check-in ~2.5h, LCD None | AT_RISK (Amber) | Assigned USR-101 |
-| **`TCK-1005`** | Journey C | Verified (PDF p7) | Bedding / Room Preference | Medium | Open | Check-in +3d, LCD None | NORMAL (Green) | Assigned USR-101 (Side Convo) |
-| **`TCK-1006`** | Journey D | Verified (PDF p7) | Emergency Check-in Assist | Urgent | Open | Check-in ~45m, LCD None | AT_RISK (Amber) | Assigned USR-101 |
-| **`TCK-1007`** | Journey B (Unassigned) | Verified (PDF p7) | Emergency Check-in Assist | Urgent | New | Check-in ~2.25h, LCD None | AT_RISK (Amber) | **#1 in Triage Queue** (Score 1800.0) |
-| **`TCK-1008`** | Demo Fixture (Refund LCD) | **UNVERIFIED** (PDF p7 letter unverified) | Refund Request | High | Open | Check-in +5d, LCD ~3.0h | **AT_RISK (Amber)** (via LCD) | Assigned USR-101 (Score 1300.0) |
-
----
-
-## Monorepo Layout
 ```text
 opsdesk/
-├── backend/                  # FastAPI core application, domain services, tests, and seed generator
+├── backend/                  # FastAPI core application, services, and tests
 │   ├── app/                  # FastAPI router, models, schemas, auth dependencies
 │   ├── seed/                 # Realistic 5,000-ticket generator with Journey fixtures
 │   ├── services/             # Intent classifier, routing engine, travel SLA engine
 │   └── tests/                # Test suite (68 tests)
 ├── contracts/                # Shared JSON Schemas, Golden Vectors, openapi.json
-├── docs/                     # Architecture documentation
-│   ├── adr/                  # 5 Architectural Decision Records (ADR 0001 - 0005)
+│   ├── golden_vectors.json   # Contract golden vectors for SLA & scoring
+│   ├── openapi.json          # Exported OpenAPI 3.1 specification
+│   └── sla_engine.schema.json
+├── docs/                     # Architecture & Design documentation
+│   ├── adr/                  # 5 Architecture Decision Records (ADR 0001 - 0005)
 │   ├── ARCHITECTURE.md       # System context, component, ERD, and state machine diagrams
 │   ├── DATA_RETENTION.md     # Hot/Warm/Cold archival policies
 │   ├── DEMO_RUNBOOK.md       # Pre-demo checklist, Journey mapping, 5-minute script
@@ -140,7 +125,23 @@ opsdesk/
 ├── services/                 # Decoupled sidecar specifications (Go SSE, Rust SLA, Go Export)
 ├── .github/workflows/ci.yml  # GitHub Actions automated CI workflow
 ├── docker-compose.yml        # Multi-service composition (UNVERIFIED not built)
-├── pytest.ini                # Pytest configuration
+├── LICENSE                   # MIT License
+├── SECURITY.md               # Security policy & vulnerability reporting
 ├── requirements.txt          # Python dependencies
 └── README.md                 # System overview and quickstart
 ```
+
+---
+
+## 🔒 Security & Data Governance
+
+- **Security Policy:** Details regarding multi-tenant agency isolation, vulnerability reporting, and demo auth migration are documented in [`SECURITY.md`](SECURITY.md).
+- **Data Retention:** Tiered retention policies (Hot, Warm, Cold) and compliance boundaries are detailed in [`docs/DATA_RETENTION.md`](docs/DATA_RETENTION.md).
+- **Architecture & ADRs:** Key architectural decisions (FastAPI source of truth, transactional outbox, intent-aware SLA) are recorded in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and [`docs/adr/`](docs/adr/).
+
+---
+
+## 📄 License
+
+This project is licensed under the terms of the [MIT License](LICENSE).  
+Copyright (c) 2026 Yash Patadiya and OpsDesk Contributors.
