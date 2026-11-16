@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { UserProvider } from "@/context/UserContext";
+import { ToastProvider } from "@/context/ToastContext";
 import { TopNav } from "@/components/TopNav";
 
 export const metadata: Metadata = {
@@ -17,10 +18,12 @@ export default function RootLayout({
     <html lang="en">
       <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">
         <UserProvider>
-          <TopNav />
-          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            {children}
-          </main>
+          <ToastProvider>
+            <TopNav />
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+              {children}
+            </main>
+          </ToastProvider>
         </UserProvider>
       </body>
     </html>

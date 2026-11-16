@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useUser } from "@/context/UserContext";
+import { useToast } from "@/context/ToastContext";
 import {
   fetchTicketDetail,
   assignTicket,
@@ -40,6 +41,7 @@ export default function TicketDetailPage() {
   const params = useParams();
   const ticketId = params.id as string;
   const { currentUser, isStaff } = useUser();
+  const { showToast } = useToast();
 
   const [ticket, setTicket] = useState<TicketDetail | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -99,9 +101,10 @@ export default function TicketDetailPage() {
     try {
       await postMessage(ticketId, messageType, messageContent, currentUser.id);
       setMessageContent("");
+      showToast(messageType === "PublicReply" ? "Public reply posted to agency" : "Internal staff note recorded", "success");
       loadTicket();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to post message");
+      showToast(err instanceof Error ? err.message : "Failed to post message", "error");
     } finally {
       setSendingMessage(false);
     }
@@ -113,9 +116,10 @@ export default function TicketDetailPage() {
     try {
       await postSideThreadMessage(ticketId, sideId, sideReplyBody, currentUser.id);
       setSideReplyBody("");
+      showToast("Supplier side-conversation message sent", "success");
       loadTicket();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to post supplier reply");
+      showToast(err instanceof Error ? err.message : "Failed to post supplier reply", "error");
     } finally {
       setSendingSideReply(false);
     }
@@ -143,18 +147,20 @@ export default function TicketDetailPage() {
       setNewSubject("");
       setNewRecipients("");
       setNewInitialMsg("");
+      showToast(`Supplier side-thread opened with ${newSupplierName}`, "success");
       loadTicket();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to create side conversation");
+      showToast(err instanceof Error ? err.message : "Failed to create side conversation", "error");
     }
   };
 
   const handleStatusChange = async (newStatus: string) => {
     try {
       await updateTicketStatus(ticketId, newStatus, currentUser.id);
+      showToast(`Ticket status updated to ${newStatus}`, "info");
       loadTicket();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Invalid status transition");
+      showToast(err instanceof Error ? err.message : "Invalid status transition", "error");
     }
   };
 
@@ -164,9 +170,10 @@ export default function TicketDetailPage() {
       await transferTicket(ticketId, transferAgentId, transferReason, currentUser.id);
       setTransferModalOpen(false);
       setTransferReason("");
+      showToast(`Ticket successfully transferred to ${transferAgentId} (side threads preserved)`, "success");
       loadTicket();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Transfer failed");
+      showToast(err instanceof Error ? err.message : "Transfer failed", "error");
     }
   };
 
@@ -176,9 +183,10 @@ export default function TicketDetailPage() {
       await escalateTicket(ticketId, escalateReason, currentUser.id);
       setEscalateModalOpen(false);
       setEscalateReason("");
+      showToast("Ticket escalated to Operations Escalation Manager", "warning");
       loadTicket();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Escalation failed");
+      showToast(err instanceof Error ? err.message : "Escalation failed", "error");
     }
   };
 
@@ -188,18 +196,20 @@ export default function TicketDetailPage() {
       await linkSuggestedBug(ticketId, bugLink, currentUser.id);
       setBugModalOpen(false);
       setBugLink("");
+      showToast("Internal bug link successfully associated", "success");
       loadTicket();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Bug link failed");
+      showToast(err instanceof Error ? err.message : "Bug link failed", "error");
     }
   };
 
   const handleUnassign = async () => {
     try {
       await unassignTicket(ticketId, currentUser.id);
+      showToast("Ticket returned to unassigned operations queue", "info");
       loadTicket();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Unassign failed");
+      showToast(err instanceof Error ? err.message : "Unassign failed", "error");
     }
   };
 

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useUser } from "@/context/UserContext";
+import { useToast } from "@/context/ToastContext";
 import { fetchInsightsThemes, getExportUrl } from "@/lib/api";
 import { InsightsResponse } from "@/lib/types";
 import {
@@ -19,6 +20,7 @@ import {
 
 export default function InsightsPage() {
   const { currentUser, isLead, isEscalationManager } = useUser();
+  const { showToast } = useToast();
   const [data, setData] = useState<InsightsResponse | null>(null);
   const [days, setDays] = useState<number>(7);
   const [loading, setLoading] = useState<boolean>(true);
@@ -50,10 +52,11 @@ export default function InsightsPage() {
   // Handle CSV export with X-User-Id header
   const handleExportCsv = async () => {
     if (!isLead) {
-      alert("CSV export is restricted to Operations Team Lead (RBAC rule). Current role: " + currentUser.role);
+      showToast("CSV export is restricted to Operations Team Lead (RBAC rule). Current role: " + currentUser.role, "warning");
       return;
     }
     setIsExporting(true);
+    showToast("Starting uncapped database streaming export...", "info");
     try {
       const res = await fetch(getExportUrl(), {
         headers: {
@@ -73,9 +76,10 @@ export default function InsightsPage() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+      showToast("Uncapped CSV dataset downloaded successfully", "success");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Export failed";
-      alert("Error exporting CSV: " + msg);
+      showToast("Error exporting CSV: " + msg, "error");
     } finally {
       setIsExporting(false);
     }
