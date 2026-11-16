@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session, defer
 from sqlalchemy import desc, func, text
 
 from backend.app.database import get_db, ensure_schema_migrations, engine
-ensure_schema_migrations(engine)
 from backend.app.models import (
     User, Agency, Ticket, TicketLink, TicketMessage,
     SideConversation, SideConversationRecipient, SideConversationMessage,
@@ -60,6 +59,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.on_event("startup")
+def on_startup():
+    ensure_schema_migrations(engine)
 
 RATE_LIMIT_PER_MINUTE = int(os.environ.get("RATE_LIMIT_PER_MINUTE", "120"))
 RATE_LIMIT_WINDOW = 60.0  # seconds
