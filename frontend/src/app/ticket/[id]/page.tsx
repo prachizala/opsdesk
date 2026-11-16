@@ -90,6 +90,8 @@ export default function TicketDetailPage() {
 
   useEffect(() => {
     loadTicket();
+    const interval = setInterval(loadTicket, 30000);
+    return () => clearInterval(interval);
   }, [loadTicket]);
 
   const handlePostMessage = async (e: React.FormEvent) => {
@@ -450,9 +452,10 @@ export default function TicketDetailPage() {
                   </button>
                   <button
                     onClick={() => setEscalateModalOpen(true)}
-                    className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 border border-rose-200 rounded bg-rose-50 text-rose-700 hover:bg-rose-100 font-semibold"
+                    disabled={ticket.status === "Escalated"}
+                    className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 border border-rose-200 rounded bg-rose-50 text-rose-700 hover:bg-rose-100 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <ShieldAlert className="w-3.5 h-3.5 text-rose-600" /> Escalate
+                    <ShieldAlert className="w-3.5 h-3.5 text-rose-600" /> {ticket.status === "Escalated" ? "Escalated" : "Escalate"}
                   </button>
                 </div>
 

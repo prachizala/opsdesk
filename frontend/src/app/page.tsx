@@ -301,7 +301,10 @@ export default function QueuePage() {
                       </td>
                     )}
                     {isStaff && (
-                      <td className="px-4 py-3 text-xs font-mono font-semibold text-right text-slate-700">
+                      <td
+                        className="px-4 py-3 text-xs font-mono font-semibold text-right text-slate-700 cursor-help"
+                        title={ticket.routing_reason ? `Routing Reason: ${ticket.routing_reason}` : "Tier-2 Continuous Score"}
+                      >
                         {ticket.queue_score !== null ? ticket.queue_score.toFixed(1) : "—"}
                       </td>
                     )}
