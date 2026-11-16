@@ -25,80 +25,29 @@ from backend.services.intent_classifier import suggest_ticket_intent
 from backend.seed.seed_data import seed_database
 
 # ============================================================================
-# 0. TEST DATABASE ISOLATION FIXTURES
-# ============================================================================
-
-@pytest.fixture(scope="session")
-def test_db_setup():
-    """
-    Creates an isolated temporary SQLite database for tests.
-    Guarantees dev opsdesk.db is NEVER touched, cleared, or altered by test suite.
-    """
-    temp_dir = tempfile.gettempdir()
-    db_file = os.path.join(temp_dir, f"test_opsdesk_{uuid.uuid4().hex[:8]}.db")
-    engine = create_engine(f"sqlite:///{db_file}", connect_args={"check_same_thread": False})
-    
-    # Seed the isolated test database
-    TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    session = TestSessionLocal()
-    seed_database(session, engine_bind=engine, total_tickets=5000)
-    session.close()
-
-    yield engine, TestSessionLocal
-
-    engine.dispose()
-    if os.path.exists(db_file):
-        try:
-            os.remove(db_file)
-        except Exception:
-            pass
-
-@pytest.fixture(scope="function")
-def db_session(test_db_setup):
-    """Provides a transactional session on the isolated test database."""
-    _, TestSessionLocal = test_db_setup
-    session = TestSessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
-
-@pytest.fixture(scope="session")
-def client(test_db_setup):
-    """Configures FastAPI TestClient overriding get_db with the isolated test DB."""
-    engine, TestSessionLocal = test_db_setup
-
-    def override_get_db():
-        db = TestSessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as c:
-        yield c
-    app.dependency_overrides.clear()
-
-
-# ============================================================================
 # 1. DATABASE ISOLATION VERIFICATION TEST
 # ============================================================================
 
-def test_dev_database_isolation():
+def test_dev_database_isolation(dev_db_initial_state):
     """
     PROVE TEST DB ISOLATION:
     Verifies that the development database (opsdesk.db) remains untouched
-    with exactly 5,000 seeded tickets while test suite operates in isolation.
+    with exactly 5,000 seeded tickets and its mtime is unchanged after test suite operations.
     """
-    dev_db_path = os.path.join(os.getcwd(), "opsdesk.db")
-    assert os.path.exists(dev_db_path), "Development database opsdesk.db must exist"
-    conn = sqlite3.connect(dev_db_path)
+    path = dev_db_initial_state["path"]
+    initial_mtime = dev_db_initial_state["mtime"]
+    initial_count = dev_db_initial_state["count"]
+
+    assert os.path.exists(path), "Development database opsdesk.db must exist"
+    current_mtime = os.path.getmtime(path)
+    assert current_mtime == initial_mtime, f"Dev DB mtime was modified: {current_mtime} != {initial_mtime}"
+
+    conn = sqlite3.connect(path)
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM tickets")
-    dev_count = c.fetchone()[0]
+    current_count = c.fetchone()[0]
     conn.close()
-    assert dev_count == 5000, f"Expected dev DB to hold 5000 tickets, found {dev_count}"
+    assert current_count == initial_count == 5000, f"Expected dev DB to hold 5000 tickets, found {current_count}"
 
 
 # ============================================================================
@@ -533,10 +482,12 @@ def test_ticket_transfer_preserves_side_conversation_recipients(client: TestClie
     """
     MVP-4 CORE TEST:
     Transferring a ticket from Aisha (USR-101) to Rahul (USR-102) preserves
-    all supplier side conversation recipients without wiping or overwriting them.
+    all supplier side conversation recipients without wiping or overwriting them,
+    and updates routing_reason to reflect the transfer path.
     """
-    # Check TCK-1005 initial recipients
+    # Check TCK-1005 initial recipients and initial assigned agent
     detail_before = client.get("/api/tickets/TCK-1005", headers={"X-User-Id": "USR-101"}).json()
+    assert detail_before["assigned_to"] == "USR-101"
     recipients_before = detail_before["side_conversations"][0]["recipients"]
     assert "reservations@vendor.example.com" in recipients_before
 
@@ -547,8 +498,11 @@ def test_ticket_transfer_preserves_side_conversation_recipients(client: TestClie
         headers={"X-User-Id": "USR-101"}
     )
     assert transfer_resp.status_code == 200
-    assert transfer_resp.json()["assigned_to"] == "USR-102"
-    assert transfer_resp.json()["total_recipients_preserved"] >= 2
+    transfer_data = transfer_resp.json()
+    assert transfer_data["assigned_to"] == "USR-102"
+    assert transfer_data["total_recipients_preserved"] >= 2
+    assert "Transferred from USR-101" in transfer_data["routing_reason"]
+    assert "to USR-102" in transfer_data["routing_reason"]
 
     # Verify recipients after transfer
     detail_after = client.get("/api/tickets/TCK-1005", headers={"X-User-Id": "USR-102"}).json()
@@ -556,14 +510,28 @@ def test_ticket_transfer_preserves_side_conversation_recipients(client: TestClie
     recipients_after = detail_after["side_conversations"][0]["recipients"]
     assert recipients_after == recipients_before
 
+def test_ticket_transfer_to_same_agent_400(client: TestClient):
+    """
+    Attempting to transfer a ticket to the agent who is currently assigned returns 400 Bad Request.
+    """
+    # TCK-1005 is now assigned to USR-102 from previous test
+    resp = client.post(
+        "/api/tickets/TCK-1005/transfer",
+        json={"target_agent_id": "USR-102", "reason": "Redundant transfer attempt"},
+        headers={"X-User-Id": "USR-102"}
+    )
+    assert resp.status_code == 400
+    assert "already assigned" in resp.json()["detail"]
+
 def test_ticket_escalate_assigns_to_vikram_and_writes_outbox(client: TestClient, db_session: Session):
     """
-    Escalating a ticket updates status to 'Escalated', reassigns to USR-103 (Vikram Malhotra),
-    and records an event in events_outbox.
+    Escalating a ticket updates status to 'Escalated', reassigns to configured manager USR-103,
+    and records an event in events_outbox with free-text reason stripped from the public payload.
     """
+    freetext_reason = "Confidential dispute with front desk management; potential legal threat."
     resp = client.post(
         "/api/tickets/TCK-1004/escalate",
-        json={"reason": "Guest at front desk threatening cancellation; urgent managerial intervention required."},
+        json={"reason": freetext_reason},
         headers={"X-User-Id": "USR-101"}
     )
     assert resp.status_code == 200
@@ -580,6 +548,106 @@ def test_ticket_escalate_assigns_to_vikram_and_writes_outbox(client: TestClient,
     assert outbox.visibility == "public"
     payload = json.loads(outbox.payload_json)
     assert payload["assigned_to"] == "USR-103"
+    # CRITICAL: Free-text reason must NEVER be leaked in public event payload
+    assert "reason" not in payload
+
+    # Verify requester-scoped outbox query cannot see free-text reason
+    requester_events = db_session.query(EventOutbox).filter(
+        EventOutbox.agency_id == "AGY-001",
+        EventOutbox.visibility == "public"
+    ).all()
+    for ev in requester_events:
+        p = json.loads(ev.payload_json)
+        assert "reason" not in p
+        assert freetext_reason not in ev.payload_json
+
+def test_requester_cannot_update_ticket_status_403(client: TestClient):
+    """
+    Requesters calling POST /api/tickets/{id}/status receive 403 Forbidden.
+    Only internal operations staff are permitted to advance ticket lifecycle.
+    """
+    resp = client.post(
+        "/api/tickets/TCK-1004/status",
+        json={"status": "Pending"},
+        headers={"X-User-Id": "USR-201"}
+    )
+    assert resp.status_code == 403
+    assert "Forbidden" in resp.json()["detail"]
+
+def test_tickets_view_by_intent(client: TestClient):
+    """
+    view=by_intent with intent filter returns only matching tickets and accurate total count.
+    """
+    resp = client.get("/api/tickets?view=by_intent&intent=Refund+Request", headers={"X-User-Id": "USR-101"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] > 0
+    for t in data["tickets"]:
+        assert t["intent"] == "Refund Request"
+
+def test_tickets_view_by_intent_grouped(client: TestClient):
+    """
+    view=by_intent without specific intent parameter returns sorted intent list.
+    """
+    resp = client.get("/api/tickets?view=by_intent", headers={"X-User-Id": "USR-101"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] > 0
+
+def test_tickets_view_by_region(client: TestClient):
+    """
+    view=by_region for MEA staff (USR-101) returns tickets from MEA agencies.
+    """
+    resp = client.get("/api/tickets?view=by_region", headers={"X-User-Id": "USR-101"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] > 0
+
+def test_tickets_view_linked_and_requester_scoping(client: TestClient):
+    """
+    view=linked returns linked tickets.
+    Requester's linked view is strictly isolated to their own agency.
+    """
+    # Internal staff sees linked tickets across the platform
+    resp_staff = client.get("/api/tickets?view=linked", headers={"X-User-Id": "USR-101"})
+    assert resp_staff.status_code == 200
+    assert resp_staff.json()["total"] >= 2
+
+    # Requester USR-201 (AGY-001) only sees linked tickets within AGY-001
+    resp_req = client.get("/api/tickets?view=linked", headers={"X-User-Id": "USR-201"})
+    assert resp_req.status_code == 200
+    data_req = resp_req.json()
+    for t in data_req["tickets"]:
+        assert t["agency_id"] == "AGY-001"
+
+def test_tickets_total_count_before_pagination(client: TestClient):
+    """
+    GET /api/tickets returns total count reflecting all matching tickets before limit pagination.
+    """
+    resp = client.get("/api/tickets?view=triage&limit=5", headers={"X-User-Id": "USR-101"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["tickets"]) == 5
+    assert data["total"] > 5
+
+def test_events_schema_enum_parity():
+    """
+    Verifies that all event types emitted in backend/app/main.py are explicitly
+    defined in the contracts/events.schema.json event_type enum.
+    """
+    import re
+    contracts_path = os.path.join(os.getcwd(), "contracts", "events.schema.json")
+    with open(contracts_path, "r", encoding="utf-8") as f:
+        schema = json.load(f)
+    allowed_enums = set(schema["properties"]["event_type"]["enum"])
+
+    main_py_path = os.path.join(os.getcwd(), "backend", "app", "main.py")
+    with open(main_py_path, "r", encoding="utf-8") as f:
+        code = f.read()
+
+    emitted_types = set(re.findall(r'event_type=["\']([^"\']+)["\']', code))
+    assert len(emitted_types) > 0, "Expected to find emitted event types in main.py"
+    assert emitted_types.issubset(allowed_enums), f"Emitted types not in schema: {emitted_types - allowed_enums}"
 
 def test_invalid_status_transition_returns_409(client: TestClient):
     """
