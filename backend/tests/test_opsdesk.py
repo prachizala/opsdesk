@@ -531,7 +531,7 @@ def test_ticket_transfer_to_same_agent_400(client: TestClient, db_session: Sessi
         agency_id="AGY-001",
         title="Self Transfer Test Case",
         description="Ticket for testing redundant transfer rejection",
-        intent="General Operations Inquiry",
+        intent="Unclassified",
         priority="Medium",
         status="Open",
         check_in_date=now + timedelta(days=5),
@@ -838,7 +838,7 @@ def test_requester_detail_linked_tickets_scoped_to_own_agency(client: TestClient
         agency_id="AGY-001",
         title="AGY-001 Ticket",
         description="Ticket in agency 1",
-        intent="General Operations Inquiry",
+        intent="Unclassified",
         priority="Medium",
         status="Open",
         check_in_date=now + timedelta(days=2),
@@ -852,7 +852,7 @@ def test_requester_detail_linked_tickets_scoped_to_own_agency(client: TestClient
         agency_id="AGY-002",
         title="AGY-002 Ticket",
         description="Ticket in agency 2",
-        intent="General Operations Inquiry",
+        intent="Unclassified",
         priority="Medium",
         status="Open",
         check_in_date=now + timedelta(days=2),
@@ -910,3 +910,145 @@ def test_unassigned_journey_b_triage_top3(client: TestClient):
     assert t1007["status"] == "New"
     assert t1007["priority"] == "Urgent"
     assert t1007["assigned_to"] is None
+
+
+def test_schema_datetime_normalization_unit():
+    """
+    Verifies that '...Z', '...+05:30', and naive ISO string inputs
+    all normalize to the exact same naive UTC datetime.
+    """
+    from backend.app.schemas import TicketCreateSchema
+
+    base_payload = {
+        "title": "Datetime Normalization Test",
+        "description": "Checking UTC conversion across formats",
+        "tboh_id": "TBOH-TIME-001",
+        "priority": "High",
+        "intent": "Emergency Check-in Assist",
+        "agency_id": "AGY-001"
+    }
+
+    # Format 1: Trailing 'Z' (UTC)
+    payload_z = {**base_payload, "check_in_date": "2026-11-20T10:00:00Z", "lcd_date": "2026-11-20T10:00:00Z"}
+    schema_z = TicketCreateSchema(**payload_z)
+
+    # Format 2: Timezone offset '+05:30' (15:30 IST is 10:00 UTC)
+    payload_offset = {**base_payload, "check_in_date": "2026-11-20T15:30:00+05:30", "lcd_date": "2026-11-20T15:30:00+05:30"}
+    schema_offset = TicketCreateSchema(**payload_offset)
+
+    # Format 3: Naive UTC string
+    payload_naive = {**base_payload, "check_in_date": "2026-11-20T10:00:00", "lcd_date": "2026-11-20T10:00:00"}
+    schema_naive = TicketCreateSchema(**payload_naive)
+
+    # All three must result in exact same naive UTC datetime
+    expected_dt = datetime(2026, 11, 20, 10, 0, 0)
+    assert schema_z.check_in_date == expected_dt
+    assert schema_z.check_in_date.tzinfo is None
+    assert schema_offset.check_in_date == expected_dt
+    assert schema_offset.check_in_date.tzinfo is None
+    assert schema_naive.check_in_date == expected_dt
+    assert schema_naive.check_in_date.tzinfo is None
+
+    assert schema_z.check_in_date == schema_offset.check_in_date == schema_naive.check_in_date
+
+
+def test_endpoint_ticket_create_with_z_datetime_201(client: TestClient):
+    """
+    Verifies that POST /api/tickets with '...Z' datetime succeeds with HTTP 201 (not 500).
+    """
+    now = datetime.utcnow().replace(microsecond=0)
+    checkin_dt = now + timedelta(days=5, hours=2)
+    lcd_dt = now + timedelta(days=5)
+
+    payload = {
+        "title": "Timezone Aware Payload Test",
+        "description": "Sending trailing Z in check-in and lcd timestamps",
+        "tboh_id": "TBOH-TZ-9900",
+        "priority": "Urgent",
+        "check_in_date": checkin_dt.isoformat() + "Z",
+        "lcd_date": lcd_dt.isoformat() + "Z",
+        "intent": "Emergency Check-in Assist",
+        "agency_id": "AGY-001"
+    }
+    resp = client.post("/api/tickets", json=payload, headers={"X-User-Id": "USR-101"})
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["tboh_id"] == "TBOH-TZ-9900"
+    ticket_id = data["id"]
+
+    # Verify detail retrieval shows normalized naive datetime
+    detail_res = client.get(f"/api/tickets/{ticket_id}", headers={"X-User-Id": "USR-101"})
+    assert detail_res.status_code == 200
+    detail = detail_res.json()
+    assert detail["check_in_date"] == checkin_dt.isoformat()
+    assert detail["lcd_date"] == lcd_dt.isoformat()
+
+
+def test_schema_validation_failures(client: TestClient):
+    """
+    Verifies strict validation rules:
+    - Invalid priority returns 422
+    - Invalid intent returns 422
+    - Invalid tboh_id regex returns 422
+    - Title > 200 chars returns 422
+    - Invalid side-thread email format returns 422
+    - Side-thread recipients > 20 returns 422
+    - Invalid message_type returns 422
+    - Invalid status returns 422
+    """
+    now = datetime.utcnow().replace(microsecond=0)
+    valid_base = {
+        "title": "Valid Ticket Title",
+        "description": "Valid ticket description for testing",
+        "tboh_id": "TBOH-VAL-001",
+        "priority": "Medium",
+        "check_in_date": (now + timedelta(days=10)).isoformat() + "Z",
+        "lcd_date": (now + timedelta(days=9)).isoformat() + "Z",
+        "intent": "Unclassified",
+        "agency_id": "AGY-001"
+    }
+
+    # 1. Invalid priority
+    res1 = client.post("/api/tickets", json={**valid_base, "priority": "SuperUrgent"}, headers={"X-User-Id": "USR-101"})
+    assert res1.status_code == 422
+
+    # 2. Invalid intent
+    res2 = client.post("/api/tickets", json={**valid_base, "intent": "InvalidIntentValue"}, headers={"X-User-Id": "USR-101"})
+    assert res2.status_code == 422
+
+    # 3. Invalid tboh_id regex
+    res3 = client.post("/api/tickets", json={**valid_base, "tboh_id": "NOT-A-TBOH-ID"}, headers={"X-User-Id": "USR-101"})
+    assert res3.status_code == 422
+
+    # 4. Title > 200 chars
+    res4 = client.post("/api/tickets", json={**valid_base, "title": "A" * 201}, headers={"X-User-Id": "USR-101"})
+    assert res4.status_code == 422
+
+    # 5. Invalid side-thread recipient email format
+    side_base = {
+        "supplier_name": "Test Hotel",
+        "subject": "Inquiry",
+        "recipients": ["invalid-email-format"],
+        "initial_message": "Hello from operations"
+    }
+    res5 = client.post("/api/tickets/TCK-1005/side-threads", json=side_base, headers={"X-User-Id": "USR-101"})
+    assert res5.status_code == 422
+
+    # 6. Side-thread recipients > 20
+    side_overflow = {
+        "supplier_name": "Test Hotel",
+        "subject": "Inquiry",
+        "recipients": [f"user{i}@example.com" for i in range(21)],
+        "initial_message": "Hello from operations"
+    }
+    res6 = client.post("/api/tickets/TCK-1005/side-threads", json=side_overflow, headers={"X-User-Id": "USR-101"})
+    assert res6.status_code == 422
+
+    # 7. Invalid message_type Literal
+    res7 = client.post("/api/tickets/TCK-1005/messages", json={"message_type": "PrivateNote", "content": "Note text"}, headers={"X-User-Id": "USR-101"})
+    assert res7.status_code == 422
+
+    # 8. Invalid status Literal
+    res8 = client.post("/api/tickets/TCK-1005/status", json={"status": "ArchivedStatus"}, headers={"X-User-Id": "USR-101"})
+    assert res8.status_code == 422
+

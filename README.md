@@ -23,8 +23,8 @@ This checklist strictly tracks the requirements specified in *Zendesk-Darwin box
 | **MVP-3 · Side conversations** | Page 5 | • Side-conversation threads with explicit recipient lists (decoupled from assignee)<br>• Recipients stay correct and preserved after agent transfer<br>• Distinguish internal notes (`InternalNote`) vs external replies (`PublicReply`) | **Backend implemented, UI pending** | Implemented in `backend/app/main.py` (`/side-threads` endpoints, `/messages` endpoint, and `POST /api/tickets/{id}/transfer`). Thread viewer UI pending. |
 | **MVP-4 · Travel-aware SLA & escalation** | Page 6 | • Dynamic SLA countdown using priority + check-in / LCD proximity<br>• At-risk / breached indicators on queue<br>• Escalate to Escalation Manager as a first-class action (reassigns to manager queue, logs on timeline) | **Backend implemented, UI pending** | Implemented in `backend/services/sla_engine.py` (contract parity via `contracts/golden_vectors.json`) and `POST /api/tickets/{id}/escalate`. Visual SLA badge UI pending. |
 | **MVP-5 · Feedback / insight loop** | Page 6 | • Tag or extract themes (refund delay, supplier lag, cancellation penalty)<br>• Insights view: top themes this week + sample tickets<br>• Optional: suggested link to product / bug<br>• Stretch: AI assist that uses linked history | **Pending** | `TicketTheme` data model and seed fixture mappings created; clustering engine and top themes dashboard scheduled for Milestone 3. |
-| **MVP-6 · Data access for ops** | Page 6 | • Persist tickets across refreshes<br>• Uncapped export / API beyond artificial 3K-row UX barrier<br>• Retention / archival strategy | **Pending** | Durable SQLite/PostgreSQL persistence implemented; standalone Go streaming export daemon and export endpoint scheduled for Milestone 3 (no export endpoint in Milestone 2). |
-| **MVP-7 · Roles & access** | Page 6 | • Requester (agency): own tickets only (internal notes, queue scores, and other agencies' data hidden)<br>• Agent: organization queues<br>• Escalation Manager: escalation queue + managerial actions<br>• Lead: governance & queue health views<br>• Safe demo auth via `X-User-Id` header | **Backend implemented, UI pending** | Implemented in `backend/app/auth.py` and endpoint RBAC guards (401 on missing auth, 403 on cross-tenant access, internal field stripping for Requesters). UI login switcher pending. |
+| **MVP-6 · Data access for ops** | Page 6 | • Persist tickets across refreshes<br>• Uncapped export / API beyond artificial 3K-row UX barrier<br>• Retention / archival strategy | **Pending** | Durable SQLite/PostgreSQL persistence implemented; export endpoint: FastAPI StreamingResponse (Milestone 3). |
+| **MVP-7 · Roles & access** | Page 6 | • Requester (agency): own tickets only (internal notes, queue scores, and other agencies' data hidden)<br>• Agent: organization queues<br>• Escalation Manager: escalation queue + managerial actions<br>• Lead: governance & queue health views<br>• Demo-only auth: identity is client-supplied, not secure (PDF p6 allows demo auth) | **Backend implemented, UI pending** | Implemented in `backend/app/auth.py` and endpoint RBAC guards (401 on missing auth, 403 on cross-tenant access, internal field stripping for Requesters). UI login switcher pending. |
 
 ---
 
@@ -50,10 +50,22 @@ Verified against runtime routes in `backend/app/main.py`:
 ---
 
 ## Datetime & Timezone Decision
-The backend consistently utilizes naive UTC datetimes (`datetime.utcnow()`) across SQLite persistence, Pydantic schemas, routing calculations, and SLA evaluation. 
+The backend consistently utilizes naive UTC datetimes across SQLite persistence, routing calculations, and SLA evaluation. Incoming API request datetimes (whether supplied with 'Z', timezone offsets like '+05:30', or naive strings) are automatically parsed and normalized to naive UTC datetimes by Pydantic schema validators before database persistence or SLA calculations.
 - In development (SQLite), datetimes are stored as ISO 8601 strings in UTC.
 - In production (PostgreSQL), columns use `TIMESTAMP WITHOUT TIME ZONE` stored strictly in UTC to prevent daylight savings anomalies and database server timezone drift.
 - Client applications (Next.js 15 frontend) receive ISO 8601 UTC strings and format them into local agency or agent timezones at presentation time.
+
+---
+
+## Pre-Demo Wall-Clock Reset
+Because travel SLA countdowns and triage queue scores evaluate dynamically relative to current wall-clock time (`now`), run the reset command immediately prior to a live demonstration to calibrate all Journey fixtures:
+```bash
+python backend/seed/seed_data.py --reset
+```
+This recalibrates the key demonstration fixtures relative to execution time:
+- **`TCK-1004` (Journey B):** Emergency check-in assist (~2.5h to check-in, Urgent, AT_RISK Amber)
+- **`TCK-1006` (Journey D):** Imminent check-in assist (~45min to check-in, Urgent, AT_RISK Amber)
+- **`TCK-1007` (Journey B Unassigned):** Unassigned triage emergency (~2.25h to check-in, Urgent, AT_RISK Amber, #1 in Triage Queue)
 
 ---
 
