@@ -1,9 +1,10 @@
 import uuid
 import csv
 import io
+import json
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, Depends, HTTPException, Query, status
+from fastapi import FastAPI, Depends, HTTPException, Query, Header, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
@@ -12,7 +13,7 @@ from backend.app.database import get_db
 from backend.app.models import (
     User, Agency, Ticket, TicketLink, TicketMessage,
     SideConversation, SideConversationRecipient, SideConversationMessage,
-    TicketTheme, EventOutbox, AuditLog
+    TicketTheme, EventOutbox, AuditLog, IdempotencyRecord
 )
 from backend.app.schemas import (
     TicketCreateSchema, TicketAssignSchema, TicketStatusUpdateSchema,
@@ -251,6 +252,7 @@ def list_tickets(
 @app.post("/api/tickets", status_code=status.HTTP_201_CREATED)
 def create_ticket(
     payload: TicketCreateSchema,
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -261,7 +263,15 @@ def create_ticket(
     3. Contextual TBOH linking of previous cases.
     4. Tier-1 automated routing assignment.
     5. Atomic EventOutbox row emission and AuditLog.
+    6. Idempotent request deduplication via Idempotency-Key header.
     """
+    # 0. Check idempotency cache
+    if idempotency_key:
+        record_id = f"{current_user.id}:{idempotency_key}"
+        existing_record = db.query(IdempotencyRecord).filter(IdempotencyRecord.id == record_id).first()
+        if existing_record:
+            return json.loads(existing_record.response_json)
+
     # 1. Strict agency determination
     if current_user.role == "Requester":
         resolved_agency_id = current_user.agency_id
@@ -366,9 +376,7 @@ def create_ticket(
         details={"tboh_id": payload.tboh_id, "agency_id": resolved_agency_id}
     )
 
-    db.commit()
-
-    return {
+    response_data = {
         "id": new_ticket.id,
         "tboh_id": new_ticket.tboh_id,
         "agency_id": new_ticket.agency_id,
@@ -378,6 +386,21 @@ def create_ticket(
         "intent": new_ticket.intent,
         "linked_tickets_count": len(prior_tickets)
     }
+
+    if idempotency_key:
+        record_id = f"{current_user.id}:{idempotency_key}"
+        idem_entry = IdempotencyRecord(
+            id=record_id,
+            user_id=current_user.id,
+            key=idempotency_key,
+            ticket_id=new_ticket.id,
+            response_json=json.dumps(response_data)
+        )
+        db.add(idem_entry)
+
+    db.commit()
+
+    return response_data
 
 
 @app.get("/api/tickets/{ticket_id}")
@@ -480,6 +503,7 @@ def get_ticket_details(
         "linked_ticket_ids": linked_tickets,
         "messages": messages,
         "side_conversations": side_threads,
+        "version": ticket.version,
         "created_at": ticket.created_at.isoformat(),
         "updated_at": ticket.updated_at.isoformat()
     }
@@ -496,7 +520,7 @@ def assign_ticket(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Assigns an operations ticket to a designated staff member."""
+    """Assigns an operations ticket to a designated staff member atomically with race protection."""
     if current_user.role == "Requester":
         raise HTTPException(status_code=403, detail="Forbidden: Requesters cannot assign tickets")
 
@@ -509,10 +533,34 @@ def assign_ticket(
         raise HTTPException(status_code=400, detail="Target agent must be internal staff")
 
     old_agent = ticket.assigned_to
-    ticket.assigned_to = payload.agent_id
-    if ticket.status == "New":
-        ticket.status = "Open"
-    ticket.updated_at = datetime.utcnow()
+    current_version = ticket.version
+
+    filter_conditions = [
+        Ticket.id == ticket_id,
+        Ticket.version == current_version
+    ]
+    if old_agent is None:
+        filter_conditions.append(Ticket.assigned_to.is_(None))
+    else:
+        filter_conditions.append(Ticket.assigned_to == old_agent)
+
+    new_status = "Open" if ticket.status == "New" else ticket.status
+    now = datetime.utcnow()
+    rowcount = db.query(Ticket).filter(*filter_conditions).update(
+        {
+            Ticket.assigned_to: payload.agent_id,
+            Ticket.status: new_status,
+            Ticket.version: current_version + 1,
+            Ticket.updated_at: now
+        },
+        synchronize_session=False
+    )
+    if rowcount == 0:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Conflict: Ticket assignment race lost; ticket was claimed or modified by another agent."
+        )
 
     emit_outbox_event(
         db=db,
@@ -531,7 +579,7 @@ def assign_ticket(
     )
     db.commit()
 
-    return {"status": "success", "ticket_id": ticket.id, "assigned_to": ticket.assigned_to}
+    return {"status": "success", "ticket_id": ticket.id, "assigned_to": payload.agent_id, "version": current_version + 1}
 
 
 @app.post("/api/tickets/{ticket_id}/unassign")
@@ -540,7 +588,7 @@ def unassign_ticket(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Unassigns ticket returning it to triage."""
+    """Unassigns ticket returning it to triage atomically."""
     if current_user.role == "Requester":
         raise HTTPException(status_code=403, detail="Forbidden: Requesters cannot unassign tickets")
 
@@ -549,8 +597,26 @@ def unassign_ticket(
         raise HTTPException(status_code=404, detail="Ticket not found")
 
     old_agent = ticket.assigned_to
-    ticket.assigned_to = None
-    ticket.updated_at = datetime.utcnow()
+    current_version = ticket.version
+
+    rowcount = db.query(Ticket).filter(
+        Ticket.id == ticket_id,
+        Ticket.version == current_version
+    ).update(
+        {
+            Ticket.assigned_to: None,
+            Ticket.status: "Open" if ticket.status in ["New", "Open"] else ticket.status,
+            Ticket.version: current_version + 1,
+            Ticket.updated_at: datetime.utcnow()
+        },
+        synchronize_session=False
+    )
+    if rowcount == 0:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Conflict: Concurrent modification detected during unassignment."
+        )
 
     emit_outbox_event(
         db=db,
@@ -569,7 +635,7 @@ def unassign_ticket(
     )
     db.commit()
 
-    return {"status": "success", "ticket_id": ticket.id, "assigned_to": None}
+    return {"status": "success", "ticket_id": ticket.id, "assigned_to": None, "version": current_version + 1}
 
 
 @app.post("/api/tickets/{ticket_id}/status")
@@ -582,7 +648,7 @@ def update_ticket_status(
     """
     Transitions ticket status according to ALLOWED_STATUS_TRANSITIONS graph.
     Status transitions are restricted strictly to internal operations staff (Requesters get 403).
-    Returns 409 Conflict if transition is not permitted.
+    Returns 409 Conflict if transition is not permitted or if stale version detected.
     """
     if current_user.role == "Requester":
         raise HTTPException(
@@ -594,6 +660,12 @@ def update_ticket_status(
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
 
+    if payload.version is not None and ticket.version != payload.version:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Conflict: Stale write. Ticket is at version {ticket.version}, expected {payload.version}."
+        )
+
     allowed = ALLOWED_STATUS_TRANSITIONS.get(ticket.status, [])
     if payload.status not in allowed:
         raise HTTPException(
@@ -602,8 +674,25 @@ def update_ticket_status(
         )
 
     old_status = ticket.status
-    ticket.status = payload.status
-    ticket.updated_at = datetime.utcnow()
+    current_version = ticket.version
+
+    rowcount = db.query(Ticket).filter(
+        Ticket.id == ticket_id,
+        Ticket.version == current_version
+    ).update(
+        {
+            Ticket.status: payload.status,
+            Ticket.version: current_version + 1,
+            Ticket.updated_at: datetime.utcnow()
+        },
+        synchronize_session=False
+    )
+    if rowcount == 0:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Conflict: Concurrent modification detected during status update."
+        )
 
     emit_outbox_event(
         db=db,
@@ -611,18 +700,18 @@ def update_ticket_status(
         ticket_id=ticket.id,
         agency_id=ticket.agency_id,
         visibility="public",
-        payload={"ticket_id": ticket.id, "old_status": old_status, "new_status": ticket.status}
+        payload={"ticket_id": ticket.id, "old_status": old_status, "new_status": payload.status}
     )
     record_audit_log(
         db=db,
         ticket_id=ticket.id,
         actor_id=current_user.id,
         action="ticket.status_changed",
-        details={"old_status": old_status, "new_status": ticket.status}
+        details={"old_status": old_status, "new_status": payload.status}
     )
     db.commit()
 
-    return {"status": "success", "ticket_id": ticket.id, "old_status": old_status, "new_status": ticket.status}
+    return {"status": "success", "ticket_id": ticket.id, "old_status": old_status, "new_status": payload.status, "version": current_version + 1}
 
 
 @app.post("/api/tickets/{ticket_id}/escalate")
@@ -637,7 +726,7 @@ def escalate_ticket(
     - Sets status to 'Escalated'
     - Reassigns ticket to configured Escalation Manager (DEFAULT_ESCALATION_MANAGER_ID)
     - Records reason in audit log.
-    - Public outbox payload excludes internal free-text reason to prevent operational leakage.
+    - Protected with optimistic version checking.
     """
     if current_user.role == "Requester":
         raise HTTPException(status_code=403, detail="Forbidden: Requesters cannot escalate tickets directly")
@@ -645,6 +734,12 @@ def escalate_ticket(
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
+
+    if payload.version is not None and ticket.version != payload.version:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Conflict: Stale write. Ticket is at version {ticket.version}, expected {payload.version}."
+        )
 
     allowed = ALLOWED_STATUS_TRANSITIONS.get(ticket.status, [])
     if "Escalated" not in allowed and ticket.status != "Escalated":
@@ -655,11 +750,28 @@ def escalate_ticket(
 
     old_status = ticket.status
     old_assignee = ticket.assigned_to
+    current_version = ticket.version
+    routing_reason = f"Escalated to Escalation Manager ({DEFAULT_ESCALATION_MANAGER_ID})"
 
-    ticket.status = "Escalated"
-    ticket.assigned_to = DEFAULT_ESCALATION_MANAGER_ID
-    ticket.routing_reason = f"Escalated to Escalation Manager ({DEFAULT_ESCALATION_MANAGER_ID})"
-    ticket.updated_at = datetime.utcnow()
+    rowcount = db.query(Ticket).filter(
+        Ticket.id == ticket_id,
+        Ticket.version == current_version
+    ).update(
+        {
+            Ticket.status: "Escalated",
+            Ticket.assigned_to: DEFAULT_ESCALATION_MANAGER_ID,
+            Ticket.routing_reason: routing_reason,
+            Ticket.version: current_version + 1,
+            Ticket.updated_at: datetime.utcnow()
+        },
+        synchronize_session=False
+    )
+    if rowcount == 0:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Conflict: Concurrent modification detected during escalation."
+        )
 
     # Public event payload omits free-text reason to protect internal operational discussions
     emit_outbox_event(
@@ -688,7 +800,8 @@ def escalate_ticket(
         "ticket_id": ticket.id,
         "new_status": "Escalated",
         "assigned_to": DEFAULT_ESCALATION_MANAGER_ID,
-        "routing_reason": ticket.routing_reason
+        "routing_reason": routing_reason,
+        "version": current_version + 1
     }
 
 
@@ -718,9 +831,34 @@ def transfer_ticket(
         raise HTTPException(status_code=400, detail="Target agent must be internal staff")
 
     old_agent = ticket.assigned_to
-    ticket.assigned_to = payload.target_agent_id
-    ticket.routing_reason = f"Transferred from {old_agent} to {payload.target_agent_id}"
-    ticket.updated_at = datetime.utcnow()
+    current_version = ticket.version
+
+    if payload.version is not None and ticket.version != payload.version:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Conflict: Stale write. Ticket is at version {ticket.version}, expected {payload.version}."
+        )
+
+    routing_reason = f"Transferred from {old_agent} to {payload.target_agent_id}"
+
+    rowcount = db.query(Ticket).filter(
+        Ticket.id == ticket_id,
+        Ticket.version == current_version
+    ).update(
+        {
+            Ticket.assigned_to: payload.target_agent_id,
+            Ticket.routing_reason: routing_reason,
+            Ticket.version: current_version + 1,
+            Ticket.updated_at: datetime.utcnow()
+        },
+        synchronize_session=False
+    )
+    if rowcount == 0:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Conflict: Concurrent modification detected during transfer."
+        )
 
     # Verify side conversations are preserved
     side_convo_count = len(ticket.side_conversations)
@@ -751,10 +889,11 @@ def transfer_ticket(
     return {
         "status": "success",
         "ticket_id": ticket.id,
-        "assigned_to": ticket.assigned_to,
-        "routing_reason": ticket.routing_reason,
+        "assigned_to": payload.target_agent_id,
+        "routing_reason": routing_reason,
         "side_conversations_preserved": side_convo_count,
-        "total_recipients_preserved": recipients_count
+        "total_recipients_preserved": recipients_count,
+        "version": current_version + 1
     }
 
 

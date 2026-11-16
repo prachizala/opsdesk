@@ -68,13 +68,16 @@ class TicketAssignSchema(BaseModel):
 
 class TicketStatusUpdateSchema(BaseModel):
     status: VALID_TICKET_STATUSES
+    version: Optional[int] = Field(None, description="Expected ticket version for optimistic concurrency control")
 
 class TicketEscalateSchema(BaseModel):
     reason: str = Field(..., min_length=1, max_length=1000)
+    version: Optional[int] = Field(None, description="Expected ticket version for optimistic concurrency control")
 
 class TicketTransferSchema(BaseModel):
     target_agent_id: str = Field(..., min_length=1, max_length=100)
     reason: str = Field(..., min_length=1, max_length=1000)
+    version: Optional[int] = Field(None, description="Expected ticket version for optimistic concurrency control")
 
 class TicketLinkSuggestionSchema(BaseModel):
     bug_link: str = Field(..., min_length=3, max_length=200)
