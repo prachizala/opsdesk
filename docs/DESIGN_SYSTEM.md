@@ -122,3 +122,43 @@ All colors are declared as CSS custom properties in `src/app/globals.css` and ma
 - ❌ **DON'T** add third-party component libraries or animation engines (framer-motion).
 - ❌ **DON'T** allow table numbers to jump in width during live countdown ticks.
 - ❌ **DON'T** show internal operational diagnostics to external agency Requesters.
+
+---
+
+## 6. Primitives & Components Inventory (`src/components/ui`)
+
+| Primitive | Role & Variants | Key Behavior |
+| :--- | :--- | :--- |
+| `Button` | `primary`, `secondary`, `ghost`, `danger`, `outline` | 44px min touch target, spinner loading, icon slot |
+| `IconButton` | `primary`, `secondary`, `ghost`, `danger` | Square aspect ratio, `aria-label` required |
+| `Input` / `Textarea` | Standard, error, disabled, helper text | 2px brand focus ring with 2px offset |
+| `Select` | Typed options array, placeholder, error state | Dropdown with custom SVG arrow |
+| `Tabs` | Horizontal pill tabs with count badges | Role-aware filtering, accessible keyboard tab |
+| `SlaBadge` | `NORMAL`, `AT_RISK`, `BREACHED`, `STOPPED`, `ESCALATED` | Live countdown in tabular mono numbers, `aria-live="polite"` state announce |
+| `PriorityChip` | `Urgent`, `High`, `Medium`, `Low` | Soft tinted chips with border |
+| `StatusChip` | `New`, `Open`, `Pending`, `Escalated`, `Resolved`, `Closed` | Calm, muted operational tinting |
+| `Avatar` | Size `sm`, `md`, `lg` | Deterministic background color generated via string hash |
+| `Card` | Padding `none`, `sm`, `md`, `lg` | 10px radius, 1px border, subtle shadow-sm |
+| `Modal` / `Drawer` | MaxWidth `sm` to `xl`, Width `sm` to `lg` | 14px radius, focus trap, body scroll lock, Esc to close |
+| `TravelTimeline` | Horizontal deadline track | NOW to Check-in with LCD marker; controlling deadline highlighted in 12px mono badge |
+| `EmptyState` / `ErrorState` | Calm operational copy + action CTA | Custom SVG illustration, retry action |
+| `KeyValue` | Label + value with copyable mono text | Clipboard copy button with tick feedback |
+
+---
+
+## 7. QA Verification Matrix (Phase 8 Audit)
+
+| Page | State | Requester (Agency) | Operations Agent | Team Lead |
+| :--- | :--- | :--- | :--- | :--- |
+| **`/` (Queue)** | Default | Filtered to own agency cases; no queue score or routing reason columns | Full queue with SLA left bars, score bars, sort order | Full queue + unassigned triage + export button |
+| | Loading | Full-width TableRowSkeleton (5 rows) | Full-width TableRowSkeleton (5 rows) | Full-width TableRowSkeleton (5 rows) |
+| | Empty | Clean empty state with "No cases match" | Empty state + "Clear filters" action | Empty state + "New Ticket" trigger |
+| | Error | Inline ErrorState with "Try again" | Inline ErrorState with "Try again" | Inline ErrorState with "Try again" |
+| | Mobile (<768px) | Stacked cards with SLA badge | Stacked cards with SLA badge | Stacked cards + mobile filter bottom-sheet |
+| **`/ticket/[id]`** | Default | Booking context, Public reply thread, no internal notes | 3-column layout: Booking + Travel Timeline + Center activity + Right insight rail | Full controls: Reopen closed cases, reassign, CSV |
+| | Actions | Read-only communication | Claim, Transfer, Escalate (14px modal), Status dropdown | All agent actions + terminal status override |
+| | Modals | None | Escalate Modal, Transfer Modal, Side Thread Modal | All modals + Link product defect |
+| | Mobile | Single column with tab bar | Single column with sticky tab bar | Single column with sticky tab bar |
+| **`/insights`** | Default | Restricted Access card (RBAC) | Restricted Access card (RBAC) | 4 KPI cards, horizontal SVG bar chart, theme drawer |
+| | Empty | Restricted Access card (RBAC) | Restricted Access card (RBAC) | Flight-path globe SVG + "No anomalies" |
+
