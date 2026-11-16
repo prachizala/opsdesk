@@ -9,23 +9,23 @@ The architecture enforces a strict single source of truth while supporting scala
 1. **Python FastAPI Backend (Single Source of Truth):**
    - Handles authentication, RBAC authorization, and multi-agency isolation.
    - Core relational data persistence (Tickets, Agencies, Links, Themes, Side Conversations).
-   - Routing orchestration and Gemini 3.5 Flash-Lite intent auto-suggestion.
+   - Routing orchestration and intent auto-suggestion via Gemini (model target: Gemini 3.5 Flash-Lite [UNVERIFIED model name, availability date unverified; fallback: gemini-2.5-flash]).
    - Writes transactional state changes and outbox events to `events_outbox`.
    - Active by default.
 
 2. **Go Realtime Gateway (SSE Sidecar):**
-   - **Why it exists:** Provides ultra-lightweight, high-concurrency Server-Sent Events (SSE) connections to hundreds of agent browsers without holding Python worker threads.
+   - **Why it exists:** Provides lightweight, high-concurrency Server-Sent Events (SSE) connections to operations agent browsers (design target: hundreds of concurrent connections, benchmark pending).
    - **How it works:** Reads committed events from `events_outbox` table and broadcasts them to connected browsers.
    - **Security:** Enforces agency and role filtering (e.g. Agency Requesters only receive `public` visibility events for their own agency; internal notes are withheld).
    - **Python Fallback:** SWR client polling / FastAPI long-polling when `REALTIME=off`.
 
 3. **Rust SLA & Scoring Engine:**
-   - **Why it exists:** Implements zero-allocation, sub-millisecond batch re-evaluation of travel countdown timers and queue priority scores across 50,000+ active records.
+   - **Why it exists:** High-throughput batch re-evaluation of travel countdown timers and queue priority scores across active records (design target: sub-millisecond execution, benchmark pending).
    - **How it works:** Pure functional calculations matching the shared contract in `contracts/sla_engine.schema.json` and validated against `contracts/golden_vectors.json`.
    - **Python Fallback:** `backend/services/sla_engine.py` and `backend/services/routing_engine.py` when `SLA_ENGINE=python`.
 
 4. **Go Export Service:**
-   - **Why it exists:** Handles high-throughput, multi-gigabyte un-capped CSV exports (10,000 to 50,000+ rows) without memory overhead.
+   - **Why it exists:** Handles high-throughput, un-capped CSV exports (e.g. 10,000 to 50,000+ rows) without memory spikes (design target: streaming cursor, benchmark pending).
    - **How it works:** Streams records directly from the database cursor into chunked HTTP responses.
    - **Python Fallback:** FastAPI `StreamingResponse` using Python generators when `EXPORT=fastapi`.
 

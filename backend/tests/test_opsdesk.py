@@ -266,11 +266,17 @@ def test_intent_no_match_unclassified_fallback():
 
 
 # ============================================================================
-# 5. OUTBOX TRANSACTIONAL LOGGING TESTS
+# 5. OUTBOX TRANSACTIONAL LOGGING TESTS (DATA LAYER & CONTRACT VERIFICATION)
 # ============================================================================
 
 def test_outbox_ticket_created_event(db_session: Session):
-    """Creating a ticket produces an event_outbox entry with visibility='public'."""
+    """
+    NOTE ON MILESTONE SCOPE:
+    In Milestone 1, EventOutbox rows are validated at the data model and schema contract layer.
+    Automated service-level emission hooks (FastAPI route handlers writing Ticket and EventOutbox
+    in a single atomic transaction) are scheduled for Milestone 2 implementation.
+    This test verifies outbox persistence, JSON payload serialization, and public visibility scoping.
+    """
     now = datetime.utcnow()
     t = Ticket(
         id="TCK-OUTBOX-1",
@@ -282,7 +288,7 @@ def test_outbox_ticket_created_event(db_session: Session):
         priority="Medium",
         status="New",
         check_in_date=now + timedelta(days=2),
-        lcd_date=now + timedelta(days=1),
+        lcd_date=now + timedelta(days=2),
         created_at=now
     )
     outbox_event = EventOutbox(
@@ -303,13 +309,17 @@ def test_outbox_ticket_created_event(db_session: Session):
     assert ev.visibility == "public"
     assert ev.event_type == "ticket.created"
 
-    # Clean up test records
+    # Clean up test records to preserve fixture counts
     db_session.delete(ev)
     db_session.delete(t)
     db_session.commit()
 
 def test_outbox_internal_note_visibility(db_session: Session):
-    """Adding an internal note produces an event_outbox entry with visibility='internal'."""
+    """
+    NOTE ON MILESTONE SCOPE:
+    Verifies that internal notes produce EventOutbox records with visibility='internal'.
+    This contract prevents agency requesters from receiving internal ops chatter over SSE.
+    """
     now = datetime.utcnow()
     msg = TicketMessage(
         id="MSG-INT-1",
@@ -337,7 +347,7 @@ def test_outbox_internal_note_visibility(db_session: Session):
     assert ev.visibility == "internal"
     assert ev.event_type == "message.created"
 
-    # Clean up
+    # Clean up test records
     db_session.delete(ev)
     db_session.delete(msg)
     db_session.commit()
@@ -369,6 +379,19 @@ def test_seed_zero_open_tickets_with_past_checkin(db_session: Session):
     ).count()
     assert past_active_count == 0
 
+def test_seed_escalated_count(db_session: Session):
+    """Verify exactly 40 tickets are seeded with Escalated status."""
+    escalated_count = db_session.query(Ticket).filter(Ticket.status == "Escalated").count()
+    assert escalated_count == 40
+
+def test_seed_assigned_agent_pool(db_session: Session):
+    """Verify assigned tickets are strictly assigned to Tier-1 desk agents USR-101 and USR-102."""
+    assigned_users = db_session.query(Ticket.assigned_to).filter(
+        Ticket.assigned_to.isnot(None)
+    ).distinct().all()
+    assigned_ids = {u[0] for u in assigned_users}
+    assert assigned_ids.issubset({"USR-101", "USR-102"})
+
 def test_seed_tboh_fixtures(db_session: Session):
     """Verify specific journey fixtures exist and are configured correctly."""
     # TCK-1001 & TCK-1002 share TBOH-89104 and are Closed
@@ -380,12 +403,14 @@ def test_seed_tboh_fixtures(db_session: Session):
     assert t1001.status == "Closed"
     assert t1002.status == "Closed"
 
-    # TCK-1004: Urgent, MEA, ~2.5h in future
+    # TCK-1004: Urgent, MEA, ~2.5h in future. lcd_date >= check_in_date so check-in is urgent factor.
     t1004 = db_session.query(Ticket).filter(Ticket.id == "TCK-1004").first()
     assert t1004 is not None
     assert t1004.priority == "Urgent"
     assert t1004.status == "Open"
     assert t1004.check_in_date > datetime.utcnow()
+    assert t1004.lcd_date >= t1004.check_in_date
+    assert "active cases" in t1004.routing_reason
 
     # TCK-1005: Side thread with recipient
     t1005 = db_session.query(Ticket).filter(Ticket.id == "TCK-1005").first()
@@ -395,8 +420,11 @@ def test_seed_tboh_fixtures(db_session: Session):
     assert len(sc.recipients) > 0
     assert sc.recipients[0].email == "reservations@vendor.example.com"
 
-    # TCK-1006: Urgent, ~45m in future
+    # TCK-1006: Urgent, ~45m in future. lcd_date >= check_in_date so check-in is urgent factor.
     t1006 = db_session.query(Ticket).filter(Ticket.id == "TCK-1006").first()
     assert t1006 is not None
     assert t1006.priority == "Urgent"
     assert t1006.status == "Open"
+    assert t1006.check_in_date > datetime.utcnow()
+    assert t1006.lcd_date >= t1006.check_in_date
+    assert "active cases" in t1006.routing_reason
