@@ -368,6 +368,14 @@ def test_seed_tboh_fixtures(db_session: Session):
     assert t1006.lcd_date >= t1006.check_in_date
     assert "active cases" in t1006.routing_reason
 
+    # TCK-1007: Journey B Unassigned Urgent triage fixture (~2.25h in future, AGY-001)
+    t1007 = db_session.query(Ticket).filter(Ticket.id == "TCK-1007").first()
+    assert t1007 is not None
+    assert t1007.priority == "Urgent"
+    assert t1007.status == "New"
+    assert t1007.assigned_to is None
+    assert t1007.check_in_date > datetime.utcnow()
+
 
 # ============================================================================
 # 7. FASTAPI ENDPOINTS & ROLE MATRIX TESTS (MILESTONE 2)
@@ -511,15 +519,36 @@ def test_ticket_transfer_preserves_side_conversation_recipients(client: TestClie
     recipients_after = detail_after["side_conversations"][0]["recipients"]
     assert recipients_after == recipients_before
 
-def test_ticket_transfer_to_same_agent_400(client: TestClient):
+def test_ticket_transfer_to_same_agent_400(client: TestClient, db_session: Session):
     """
-    Attempting to transfer a ticket to the agent who is currently assigned returns 400 Bad Request.
+    Self-contained test: Attempting to transfer a ticket to the agent who is currently assigned
+    returns 400 Bad Request. Does not depend on execution order or prior test mutations.
     """
-    # TCK-1005 is now assigned to USR-102 from previous test
+    now = datetime.utcnow()
+    test_ticket = Ticket(
+        id="TCK-SELF-TRANSFER",
+        tboh_id="TBOH-SELF-TEST",
+        agency_id="AGY-001",
+        title="Self Transfer Test Case",
+        description="Ticket for testing redundant transfer rejection",
+        intent="General Operations Inquiry",
+        priority="Medium",
+        status="Open",
+        check_in_date=now + timedelta(days=5),
+        lcd_date=now + timedelta(days=5),
+        assigned_to="USR-101",
+        routing_reason="Initial assignment to USR-101",
+        created_at=now,
+        updated_at=now
+    )
+    db_session.add(test_ticket)
+    db_session.commit()
+
+    # Attempt to transfer to USR-101 (who is already assigned)
     resp = client.post(
-        "/api/tickets/TCK-1005/transfer",
-        json={"target_agent_id": "USR-102", "reason": "Redundant transfer attempt"},
-        headers={"X-User-Id": "USR-102"}
+        f"/api/tickets/{test_ticket.id}/transfer",
+        json={"target_agent_id": "USR-101", "reason": "Redundant self-transfer attempt"},
+        headers={"X-User-Id": "USR-101"}
     )
     assert resp.status_code == 400
     assert "already assigned" in resp.json()["detail"]
@@ -866,3 +895,18 @@ def test_staff_create_ticket_without_agency_id_returns_400(client: TestClient):
     resp = client.post("/api/tickets", json=payload, headers={"X-User-Id": "USR-101"})
     assert resp.status_code == 400
     assert "agency_id is required" in resp.json()["detail"]
+
+def test_unassigned_journey_b_triage_top3(client: TestClient):
+    """
+    Verifies that unassigned Journey B fixture (TCK-1007) with Urgent priority and near check-in (~2.25h)
+    ranks in the top 3 of the triage queue.
+    """
+    resp = client.get("/api/tickets?view=triage&limit=5", headers={"X-User-Id": "USR-101"})
+    assert resp.status_code == 200
+    data = resp.json()
+    top3_ids = [t["id"] for t in data["tickets"][:3]]
+    assert "TCK-1007" in top3_ids, f"Expected TCK-1007 in top 3 triage tickets, found: {top3_ids}"
+    t1007 = next(t for t in data["tickets"] if t["id"] == "TCK-1007")
+    assert t1007["status"] == "New"
+    assert t1007["priority"] == "Urgent"
+    assert t1007["assigned_to"] is None

@@ -63,6 +63,16 @@ def run_checks(db_path: str = "opsdesk.db"):
     for assignee, cnt in c.fetchall():
         print(f"Assigned to {assignee}: {cnt}")
 
+    print("\n=== 7. JOURNEY FIXTURES (TCK-1001, 1002, 1004, 1005, 1006, 1007) ===")
+    c.execute("""
+    SELECT id, status, priority, assigned_to, check_in_date 
+    FROM tickets 
+    WHERE id IN ('TCK-1001', 'TCK-1002', 'TCK-1004', 'TCK-1005', 'TCK-1006', 'TCK-1007')
+    ORDER BY id
+    """)
+    for row in c.fetchall():
+        print(row)
+
     conn.close()
 
 if __name__ == "__main__":

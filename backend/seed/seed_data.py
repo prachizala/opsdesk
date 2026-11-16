@@ -172,7 +172,27 @@ def seed_database(db: Session, engine_bind=None, total_tickets: int = 5000):
     db.add(tck_1006)
     db.commit()
 
-    fixture_tickets = [tck_1001, tck_1002, tck_1004, tck_1005, tck_1006]
+    # Journey B (Unassigned Triage Fixture): Urgent routing (~2.25h check-in, MEA, AGY-001)
+    tck_1007_checkin = now + timedelta(hours=2, minutes=15)
+    tck_1007 = Ticket(
+        id="TCK-1007",
+        tboh_id="TBOH-95100",
+        agency_id="AGY-001",
+        title="Urgent unassigned: front desk check-in emergency",
+        description="Guest at resort front desk, reservation not found on hotel system. Unassigned in triage pool.",
+        intent="Emergency Check-in Assist",
+        priority="Urgent",
+        status="New",
+        check_in_date=tck_1007_checkin,
+        lcd_date=tck_1007_checkin + timedelta(hours=1),
+        assigned_to=None,
+        routing_reason="Unassigned pending triage routing",
+        created_at=now - timedelta(minutes=5)
+    )
+    db.add(tck_1007)
+    db.commit()
+
+    fixture_tickets = [tck_1001, tck_1002, tck_1004, tck_1005, tck_1006, tck_1007]
 
     # Link TCK-1001 and TCK-1002
     db.add(TicketLink(
