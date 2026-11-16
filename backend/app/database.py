@@ -1,11 +1,45 @@
-from sqlalchemy import create_engine
+import os
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.pool import StaticPool
 from backend.app.config import DATABASE_URL
 
-# For SQLite, enable check_same_thread=False
-connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+# Environment configuration with production defaults
+# Defaults: pool_size=10, max_overflow=20, pool_timeout=30 (assumption: suitable for moderate concurrent workers)
+DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "10"))
+DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "20"))
+DB_POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", "30"))
 
-engine = create_engine(DATABASE_URL, connect_args=connect_args)
+is_sqlite = DATABASE_URL.startswith("sqlite")
+is_memory = ":memory:" in DATABASE_URL
+
+connect_args = {"check_same_thread": False} if is_sqlite else {}
+engine_kwargs = {"connect_args": connect_args}
+
+if is_sqlite and is_memory:
+    engine_kwargs["poolclass"] = StaticPool
+else:
+    engine_kwargs["pool_size"] = DB_POOL_SIZE
+    engine_kwargs["max_overflow"] = DB_MAX_OVERFLOW
+    engine_kwargs["pool_timeout"] = DB_POOL_TIMEOUT
+
+engine = create_engine(DATABASE_URL, **engine_kwargs)
+
+if is_sqlite:
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        """
+        Hardens SQLite for high concurrent reads and writes:
+        - WAL (Write-Ahead Logging): Allows concurrent readers and writers without blocking readers.
+        - busy_timeout=5000: Waits up to 5,000ms for locks before raising 'database is locked'.
+        - synchronous=NORMAL: Safe with WAL mode, drastically reduces sync disk wait.
+        """
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=5000")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.close()
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

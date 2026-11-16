@@ -3,6 +3,7 @@ import io
 import csv
 import json
 import uuid
+import threading
 import sqlite3
 import tempfile
 from datetime import datetime, timedelta
@@ -1539,6 +1540,68 @@ def test_export_csv_formula_injection_escaping(client: TestClient, db_session: S
     sec_row = next((r for r in rows[1:] if r[0] == "TCK-SEC-001"), None)
     assert sec_row is not None, "Injection ticket not found in CSV export"
     assert sec_row[title_idx] == "'=1+1", f"Expected title to be escaped as ''=1+1', got {sec_row[title_idx]}"
+
+
+def test_sqlite_concurrent_writes_wal_prevents_database_is_locked():
+    """
+    CONCURRENCY TEST:
+    Verifies that SQLite WAL mode with busy_timeout=5000 eliminates
+    'database is locked' errors under multi-threaded concurrent write bursts.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    temp_db_fd, temp_db_path = tempfile.mkstemp(suffix=".db")
+    os.close(temp_db_fd)
+
+    try:
+        con = sqlite3.connect(temp_db_path)
+        cur = con.cursor()
+        cur.execute("PRAGMA journal_mode=WAL")
+        cur.execute("PRAGMA busy_timeout=5000")
+        cur.execute("PRAGMA synchronous=NORMAL")
+        cur.execute("CREATE TABLE concurrent_bench (id INTEGER PRIMARY KEY, thread_id INT, val INT)")
+        con.commit()
+        con.close()
+
+        locked_errors = 0
+        lock = threading.Lock()
+
+        def writer_task(tid: int):
+            nonlocal locked_errors
+            c = sqlite3.connect(temp_db_path, timeout=5.0)
+            c.execute("PRAGMA journal_mode=WAL")
+            c.execute("PRAGMA busy_timeout=5000")
+            c.execute("PRAGMA synchronous=NORMAL")
+            for i in range(15):
+                try:
+                    c.execute("INSERT INTO concurrent_bench (thread_id, val) VALUES (?, ?)", (tid, i))
+                    c.commit()
+                except sqlite3.OperationalError as e:
+                    if "locked" in str(e).lower():
+                        with lock:
+                            locked_errors += 1
+            c.close()
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = [executor.submit(writer_task, i) for i in range(8)]
+            for f in futures:
+                f.result()
+
+        con = sqlite3.connect(temp_db_path)
+        total_rows = con.execute("SELECT COUNT(*) FROM concurrent_bench").fetchone()[0]
+        con.close()
+
+        assert locked_errors == 0, f"Expected 0 locked errors under WAL, got {locked_errors}"
+        assert total_rows == 8 * 15, f"Expected 120 committed rows, got {total_rows}"
+    finally:
+        try:
+            os.remove(temp_db_path)
+            if os.path.exists(temp_db_path + "-wal"):
+                os.remove(temp_db_path + "-wal")
+            if os.path.exists(temp_db_path + "-shm"):
+                os.remove(temp_db_path + "-shm")
+        except Exception:
+            pass
 
 
 

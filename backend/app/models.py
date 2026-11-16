@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Text, Integer, Index
 from sqlalchemy.orm import relationship
 from backend.app.database import Base
 
@@ -38,16 +38,23 @@ class Ticket(Base):
     agency_id = Column(String(50), ForeignKey("agencies.id", ondelete="CASCADE"), nullable=False, index=True)
     title = Column(String(300), nullable=False)
     description = Column(Text, nullable=False)
-    intent = Column(String(100), nullable=False, default="Unclassified")
+    intent = Column(String(100), nullable=False, default="Unclassified", index=True)
     priority = Column(String(50), nullable=False, default="Medium")  # 'Low', 'Medium', 'High', 'Urgent'
-    status = Column(String(50), nullable=False, default="New")        # 'New', 'Open', 'Pending', 'Escalated', 'Resolved', 'Closed'
+    status = Column(String(50), nullable=False, default="New", index=True)        # 'New', 'Open', 'Pending', 'Escalated', 'Resolved', 'Closed'
     check_in_date = Column(DateTime, nullable=False, index=True)
     lcd_date = Column(DateTime, nullable=True)
     assigned_to = Column(String(50), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     routing_reason = Column(Text, nullable=True)
     suggested_bug_link = Column(String(200), nullable=True)
+    version = Column(Integer, default=1, nullable=False)  # Optimistic concurrency lock control
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_tickets_status_assigned", "status", "assigned_to"),
+        Index("ix_tickets_assigned_status", "assigned_to", "status"),
+        Index("ix_tickets_agency_status", "agency_id", "status"),
+    )
 
     agency = relationship("Agency", back_populates="tickets")
     assignee = relationship("User", back_populates="assigned_tickets", foreign_keys=[assigned_to])
@@ -157,3 +164,14 @@ class AuditLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     ticket = relationship("Ticket", back_populates="audit_logs")
+
+
+class IdempotencyRecord(Base):
+    __tablename__ = "idempotency_records"
+
+    id = Column(String(128), primary_key=True)  # user_id:idempotency_key
+    user_id = Column(String(50), nullable=False, index=True)
+    key = Column(String(100), nullable=False, index=True)
+    ticket_id = Column(String(50), nullable=False)
+    response_json = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
