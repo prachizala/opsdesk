@@ -240,9 +240,9 @@ Sidecars and modular subsystems are configured via environment variables:
 
 | Variable | Values | Default | Active Implementation | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `SLA_ENGINE` | `python` \| `rust` | `python` | Native Python reference | Pure functional calculation of travel SLA deadline and queue priority score. |
-| `REALTIME` | `off` \| `on` | `off` | SWR / Client Polling (15s) | When `off`, UI uses polling. When `on`, connects to Go SSE gateway reading `events_outbox`. |
-| `EXPORT` | `fastapi` \| `go` | `fastapi` | FastAPI `StreamingResponse` | Uses SQLAlchemy `yield_per(500)` generator. Tested: 5,000 rows in ~1.32s with zero buffering. |
+| `SLA_ENGINE` | `python` \| `rust` | `python` | Native Python reference | Pure functional calculation of travel SLA deadline and queue priority score. (Rust engine: planned, not built). |
+| `REALTIME` | `off` \| `on` | `off` | SWR / Client Polling (30s) | When `off`, UI uses polling. When `on`, connects to Go SSE gateway reading `events_outbox`. (Go SSE: planned, not built). |
+| `EXPORT` | `fastapi` \| `go` | `fastapi` | FastAPI `StreamingResponse` | Uses SQLAlchemy `yield_per(500)` generator. Tested: 5,000 rows in ~1.32s with zero buffering. (Go daemon: planned, not built). |
 | `ALLOWED_CORS_ORIGINS` | CSV of origins | `http://localhost:3000` | FastAPI CORSMiddleware | Controls allowed origins for browser AJAX/fetch requests. |
 | `OPSDESK_DEV_DB` | File path | `./opsdesk.db` | SQLite / PostgreSQL | Target connection string or local database file path. |
 
@@ -251,15 +251,15 @@ Sidecars and modular subsystems are configured via environment variables:
 ## 8. Scaling Design Targets
 
 > [!NOTE]
-> The performance metrics below represent **architectural design targets** for enterprise scale, not measured lab benchmarks (except where explicitly noted as verified).
+> The performance metrics below represent **architectural design targets** for enterprise scale, not measured lab benchmarks (except where explicitly noted as verified in lab).
 
 1. **Queue Dispatching Throughput:**
-   - *Design Target:* 10,000 active tickets evaluated in < 50ms under Rust SLA engine; < 250ms under Python reference engine.
-   - *Verified In Lab:* 5,000 seeded tickets loaded in memory and scored deterministically across two tiers.
+   - *Active Implementation:* 5,000 seeded tickets loaded in memory and scored deterministically across two tiers via Python reference engine.
+   - *Rust SLA Sidecar:* Planned, not built.
 
 2. **Uncapped CSV Export:**
-   - *Design Target:* 50,000+ tickets streamed to disk/client without memory spike (< 50MB RSS).
    - *Verified In Lab:* 5,000 seeded tickets streamed via FastAPI `yield_per(500)` in **1.32 seconds** with constant low memory footprint.
+   - *Go Streaming Sidecar:* Planned, not built.
 
 3. **Database Write Concurrency:**
-   - *Design Target:* 500 writes/second with row-level locks on PostgreSQL (planned production tier).
+   - *Production Target:* Planned migration to PostgreSQL with row-level locks (currently running SQLite prototype).
