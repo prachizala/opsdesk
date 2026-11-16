@@ -1,4 +1,6 @@
 import os
+import io
+import csv
 import json
 import uuid
 import sqlite3
@@ -1504,6 +1506,39 @@ def test_export_tickets_csv_streaming_and_row_count(client: TestClient, db_sessi
     data_rows = len(lines) - 1
     assert data_rows == db_total, f"Exported {data_rows} rows != DB count {db_total}"
     assert data_rows >= 5000, f"Expected at least 5000 rows without cap, got {data_rows}"
+
+
+def test_export_csv_formula_injection_escaping(client: TestClient, db_session: Session):
+    """
+    SECURITY: Tests that formula injection triggers (=, +, -, @, \t, \r)
+    in ticket fields are sanitized by prefixing with a single quote (') during CSV export.
+    """
+    injection_ticket = Ticket(
+        id="TCK-SEC-001",
+        tboh_id="TBOH-SEC-01",
+        agency_id="AGY-001",
+        title="=1+1",
+        description="Testing CSV formula injection protection",
+        intent="Refund Request",
+        priority="High",
+        status="Open",
+        check_in_date=datetime.utcnow() + timedelta(days=2),
+        created_at=datetime.utcnow()
+    )
+    db_session.add(injection_ticket)
+    db_session.commit()
+
+    res = client.get("/api/export/tickets.csv?status=Open", headers={"X-User-Id": "USR-104"})
+    assert res.status_code == 200
+
+    reader = csv.reader(io.StringIO(res.text))
+    rows = list(reader)
+    header = rows[0]
+    title_idx = header.index("title")
+
+    sec_row = next((r for r in rows[1:] if r[0] == "TCK-SEC-001"), None)
+    assert sec_row is not None, "Injection ticket not found in CSV export"
+    assert sec_row[title_idx] == "'=1+1", f"Expected title to be escaped as ''=1+1', got {sec_row[title_idx]}"
 
 
 

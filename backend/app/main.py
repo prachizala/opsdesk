@@ -1103,6 +1103,19 @@ def get_top_themes(
 # 13. UNCAPPED OPS DATA EXPORT (MVP-6)
 # ============================================================================
 
+def sanitize_csv_cell(val: Any) -> str:
+    """
+    Prevents CSV formula injection / CSV spreadsheet execution vulnerabilities.
+    If a cell value begins with '=', '+', '-', '@', '\t', or '\r', prefixes with a single quote.
+    """
+    if val is None:
+        return ""
+    s = str(val)
+    if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return f"'{s}"
+    return s
+
+
 @app.get("/api/export/tickets.csv")
 def export_tickets_csv(
     status: Optional[str] = None,
@@ -1115,6 +1128,7 @@ def export_tickets_csv(
     """
     Uncapped CSV data streaming export for ops beyond 3K-row UX barrier (MVP-6).
     Restricted strictly to Lead role. Memory-safe streaming via generator yield_per.
+    Applies formula injection sanitization to protect operations spreadsheets.
     """
     if current_user.role != "Lead":
         raise HTTPException(status_code=403, detail="Forbidden: Export is restricted to Lead role")
@@ -1147,17 +1161,17 @@ def export_tickets_csv(
         # Stream rows in chunks of 500 without loading all rows into RAM
         for ticket in query.yield_per(500):
             writer.writerow([
-                ticket.id,
-                ticket.tboh_id,
-                ticket.agency_id,
-                ticket.title,
-                ticket.intent or "",
-                ticket.priority,
-                ticket.status,
-                ticket.check_in_date.isoformat() if ticket.check_in_date else "",
-                ticket.lcd_date.isoformat() if ticket.lcd_date else "",
-                ticket.assigned_to or "",
-                ticket.created_at.isoformat() if ticket.created_at else ""
+                sanitize_csv_cell(ticket.id),
+                sanitize_csv_cell(ticket.tboh_id),
+                sanitize_csv_cell(ticket.agency_id),
+                sanitize_csv_cell(ticket.title),
+                sanitize_csv_cell(ticket.intent or ""),
+                sanitize_csv_cell(ticket.priority),
+                sanitize_csv_cell(ticket.status),
+                sanitize_csv_cell(ticket.check_in_date.isoformat() if ticket.check_in_date else ""),
+                sanitize_csv_cell(ticket.lcd_date.isoformat() if ticket.lcd_date else ""),
+                sanitize_csv_cell(ticket.assigned_to or ""),
+                sanitize_csv_cell(ticket.created_at.isoformat() if ticket.created_at else "")
             ])
             yield output.getvalue()
             output.seek(0)
