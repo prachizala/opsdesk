@@ -57,6 +57,18 @@ The backend consistently utilizes naive UTC datetimes across SQLite persistence,
 
 ---
 
+## Pre-Demo Wall-Clock Reset
+Because travel SLA countdowns and triage queue scores evaluate dynamically relative to current wall-clock time (`now`), run the reset command immediately prior to a live demonstration to calibrate all Journey fixtures:
+```bash
+python backend/seed/seed_data.py --reset
+```
+This recalibrates the key demonstration fixtures relative to execution time:
+- **`TCK-1004` (Journey B):** Emergency check-in assist (~2.5h to check-in, Urgent, AT_RISK Amber)
+- **`TCK-1006` (Journey D):** Imminent check-in assist (~45min to check-in, Urgent, AT_RISK Amber)
+- **`TCK-1007` (Journey B Unassigned):** Unassigned triage emergency (~2.25h to check-in, Urgent, AT_RISK Amber, #1 in Triage Queue)
+
+---
+
 ## Modular Architecture & Sidecar Contracts
 The system is built as a modular monorepo with Python FastAPI as the core source of truth and decoupled sidecar extensions:
 

@@ -1,5 +1,13 @@
+import os
+import sys
 import random
 from datetime import datetime, timedelta
+
+# Ensure repo root is on sys.path when script is invoked directly
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
 from faker import Faker
 from sqlalchemy.orm import Session
 from backend.app.database import Base, SessionLocal
@@ -360,8 +368,27 @@ def seed_database(db: Session, engine_bind=None, total_tickets: int = 5000):
     print(f"Database successfully seeded with {total_tickets} tickets.")
 
 if __name__ == "__main__":
+    import argparse
+    import sys
+    from backend.app.config import DATABASE_URL
+    from backend.app.database import engine
+
+    parser = argparse.ArgumentParser(description="Seed or reset OpsDesk development database")
+    parser.add_argument("--reset", action="store_true", help="Reset and regenerate dev database relative to current wall-clock time")
+    parser.add_argument("--yes", "-y", action="store_true", help="Confirm resetting database without safety prompt")
+    parser.add_argument("--tickets", type=int, default=5000, help="Total ticket count (default: 5000)")
+    args = parser.parse_args()
+
+    # Safety validation: ensure target is a local dev database unless --yes passed
+    is_sqlite = DATABASE_URL.startswith("sqlite")
+    is_dev_db = "opsdesk.db" in DATABASE_URL or ":memory:" in DATABASE_URL
+    if not (is_sqlite and is_dev_db) and not args.yes:
+        print(f"Safety Check Failed: DATABASE_URL '{DATABASE_URL}' does not appear to be a local dev SQLite database (opsdesk.db). Pass --yes to force.")
+        sys.exit(1)
+
+    print(f"Starting database seed process (reset={args.reset}, tickets={args.tickets}, target='{DATABASE_URL}')...")
     db = SessionLocal()
     try:
-        seed_database(db, total_tickets=5000)
+        seed_database(db, engine_bind=engine, total_tickets=args.tickets)
     finally:
         db.close()
