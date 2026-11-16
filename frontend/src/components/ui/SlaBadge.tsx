@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 export interface SlaBadgeProps {
   sla: SLAStatus;
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
   className?: string;
   isEscalated?: boolean;
 }
@@ -76,17 +76,25 @@ export function SlaBadge({ sla, size = "sm", className, isEscalated = false }: S
     return `${mins}m`;
   };
 
+  const sizeClasses = {
+    sm: "px-2.5 py-0.5 text-caption",
+    md: "px-3 py-1 text-body",
+    lg: "px-3.5 py-1.5 text-sm font-semibold",
+  };
+
+  const iconSize = size === "sm" ? "w-3.5 h-3.5" : size === "lg" ? "w-4.5 h-4.5" : "w-4 h-4";
+
   // Determine variant styling and icons
   if (sla.status === "STOPPED") {
     return (
       <span
         className={cn(
           "inline-flex items-center gap-1.5 rounded-full font-medium border bg-slate-100 text-content-secondary border-border select-none shrink-0",
-          size === "sm" ? "px-2.5 py-0.5 text-caption" : "px-3 py-1 text-body",
+          sizeClasses[size],
           className
         )}
       >
-        <PauseCircle className={size === "sm" ? "w-3.5 h-3.5" : "w-4 h-4"} />
+        <PauseCircle className={iconSize} />
         <span>Stopped</span>
       </span>
     );
@@ -97,11 +105,11 @@ export function SlaBadge({ sla, size = "sm", className, isEscalated = false }: S
       <span
         className={cn(
           "inline-flex items-center gap-1.5 rounded-full font-semibold border bg-sla-escalated-bg text-sla-escalated-text border-purple-200 select-none shrink-0",
-          size === "sm" ? "px-2.5 py-0.5 text-caption" : "px-3 py-1 text-body",
+          sizeClasses[size],
           className
         )}
       >
-        <ArrowUpCircle className={size === "sm" ? "w-3.5 h-3.5" : "w-4 h-4"} />
+        <ArrowUpCircle className={iconSize} />
         <span>Escalated</span>
         {secondsRemaining !== null && (
           <span className="font-mono-numbers opacity-85">({formatCountdown(secondsRemaining)})</span>
@@ -115,11 +123,11 @@ export function SlaBadge({ sla, size = "sm", className, isEscalated = false }: S
       <span
         className={cn(
           "inline-flex items-center gap-1.5 rounded-full font-semibold border bg-sla-breached-bg text-sla-breached-text border-red-200 select-none shrink-0",
-          size === "sm" ? "px-2.5 py-0.5 text-caption" : "px-3 py-1 text-body",
+          sizeClasses[size],
           className
         )}
       >
-        <AlertTriangle className={size === "sm" ? "w-3.5 h-3.5" : "w-4 h-4"} />
+        <AlertTriangle className={iconSize} />
         <span>Breached</span>
         {secondsRemaining !== null && (
           <span className="font-mono-numbers opacity-90">({formatCountdown(secondsRemaining)})</span>
@@ -134,11 +142,11 @@ export function SlaBadge({ sla, size = "sm", className, isEscalated = false }: S
       <span
         className={cn(
           "inline-flex items-center gap-1.5 rounded-full font-semibold border bg-sla-at_risk-bg text-sla-at_risk-text border-amber-300 select-none shrink-0",
-          size === "sm" ? "px-2.5 py-0.5 text-caption" : "px-3 py-1 text-body",
+          sizeClasses[size],
           className
         )}
       >
-        <Clock className={size === "sm" ? "w-3.5 h-3.5" : "w-4 h-4"} />
+        <Clock className={iconSize} />
         <span>At risk</span>
         {secondsRemaining !== null && (
           <span className="font-mono-numbers font-medium">({formatCountdown(secondsRemaining)})</span>
@@ -152,11 +160,11 @@ export function SlaBadge({ sla, size = "sm", className, isEscalated = false }: S
     <span
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full font-medium border bg-sla-normal-bg text-sla-normal-text border-emerald-200 select-none shrink-0",
-        size === "sm" ? "px-2.5 py-0.5 text-caption" : "px-3 py-1 text-body",
+        sizeClasses[size],
         className
       )}
     >
-      <CheckCircle2 className={size === "sm" ? "w-3.5 h-3.5" : "w-4 h-4"} />
+      <CheckCircle2 className={iconSize} />
       <span>On track</span>
       {secondsRemaining !== null && (
         <span className="font-mono-numbers opacity-80">({formatCountdown(secondsRemaining)})</span>
