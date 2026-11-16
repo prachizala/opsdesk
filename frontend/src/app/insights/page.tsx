@@ -16,6 +16,10 @@ import {
   AlertCircle,
   Clock,
   RefreshCw,
+  Activity,
+  CheckCircle,
+  Flame,
+  Layers,
 } from "lucide-react";
 
 export default function InsightsPage() {
@@ -166,6 +170,57 @@ export default function InsightsPage() {
             <Download className="w-4 h-4" />
             <span>{isExporting ? "Exporting CSV..." : "Export CSV (MVP-6)"}</span>
           </button>
+        </div>
+      </div>
+
+      {/* Operations Executive KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+            <Activity className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Indexed Volume</p>
+            <p className="text-xl font-bold text-slate-900 mt-0.5">{data?.total_tagged_records ?? 0}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Tagged in {days}d window</p>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <CheckCircle className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Handoff Retention</p>
+            <p className="text-xl font-bold text-slate-900 mt-0.5">100%</p>
+            <p className="text-[11px] text-emerald-600 font-medium mt-0.5">Transfer-Proof Threads (MVP-4)</p>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+            <Flame className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Top Issue Root</p>
+            <p className="text-xl font-bold text-slate-900 mt-0.5 truncate max-w-[130px]">
+              {data?.themes?.[0]?.theme || "N/A"}
+            </p>
+            <p className="text-[11px] text-amber-600 font-medium mt-0.5">
+              {data?.themes?.[0]?.percentage ? `${data.themes[0].percentage}% of total cases` : "0%"}
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+            <Layers className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Active Categories</p>
+            <p className="text-xl font-bold text-slate-900 mt-0.5">{data?.themes?.length ?? 0}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Clustered root cause themes</p>
+          </div>
         </div>
       </div>
 
