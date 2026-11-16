@@ -956,13 +956,17 @@ def test_endpoint_ticket_create_with_z_datetime_201(client: TestClient):
     """
     Verifies that POST /api/tickets with '...Z' datetime succeeds with HTTP 201 (not 500).
     """
+    now = datetime.utcnow().replace(microsecond=0)
+    checkin_dt = now + timedelta(days=5, hours=2)
+    lcd_dt = now + timedelta(days=5)
+
     payload = {
         "title": "Timezone Aware Payload Test",
         "description": "Sending trailing Z in check-in and lcd timestamps",
         "tboh_id": "TBOH-TZ-9900",
         "priority": "Urgent",
-        "check_in_date": "2026-11-25T14:00:00Z",
-        "lcd_date": "2026-11-25T12:00:00Z",
+        "check_in_date": checkin_dt.isoformat() + "Z",
+        "lcd_date": lcd_dt.isoformat() + "Z",
         "intent": "Emergency Check-in Assist",
         "agency_id": "AGY-001"
     }
@@ -976,8 +980,8 @@ def test_endpoint_ticket_create_with_z_datetime_201(client: TestClient):
     detail_res = client.get(f"/api/tickets/{ticket_id}", headers={"X-User-Id": "USR-101"})
     assert detail_res.status_code == 200
     detail = detail_res.json()
-    assert detail["check_in_date"] == "2026-11-25T14:00:00"
-    assert detail["lcd_date"] == "2026-11-25T12:00:00"
+    assert detail["check_in_date"] == checkin_dt.isoformat()
+    assert detail["lcd_date"] == lcd_dt.isoformat()
 
 
 def test_schema_validation_failures(client: TestClient):
@@ -989,14 +993,17 @@ def test_schema_validation_failures(client: TestClient):
     - Title > 200 chars returns 422
     - Invalid side-thread email format returns 422
     - Side-thread recipients > 20 returns 422
+    - Invalid message_type returns 422
+    - Invalid status returns 422
     """
+    now = datetime.utcnow().replace(microsecond=0)
     valid_base = {
         "title": "Valid Ticket Title",
         "description": "Valid ticket description for testing",
         "tboh_id": "TBOH-VAL-001",
         "priority": "Medium",
-        "check_in_date": "2026-12-01T10:00:00Z",
-        "lcd_date": "2026-12-01T10:00:00Z",
+        "check_in_date": (now + timedelta(days=10)).isoformat() + "Z",
+        "lcd_date": (now + timedelta(days=9)).isoformat() + "Z",
         "intent": "Unclassified",
         "agency_id": "AGY-001"
     }
@@ -1036,4 +1043,12 @@ def test_schema_validation_failures(client: TestClient):
     }
     res6 = client.post("/api/tickets/TCK-1005/side-threads", json=side_overflow, headers={"X-User-Id": "USR-101"})
     assert res6.status_code == 422
+
+    # 7. Invalid message_type Literal
+    res7 = client.post("/api/tickets/TCK-1005/messages", json={"message_type": "PrivateNote", "content": "Note text"}, headers={"X-User-Id": "USR-101"})
+    assert res7.status_code == 422
+
+    # 8. Invalid status Literal
+    res8 = client.post("/api/tickets/TCK-1005/status", json={"status": "ArchivedStatus"}, headers={"X-User-Id": "USR-101"})
+    assert res8.status_code == 422
 

@@ -29,7 +29,7 @@ THEME_MAPPINGS = {
     "Unclassified": ["General Operations Inquiry"]
 }
 
-def seed_database(db: Session, engine_bind=None, total_tickets: int = 5000):
+def seed_database(db: Session, engine_bind=None, total_tickets: int = 5000, drop_existing: bool = False):
     """
     Seeds the database with deterministic fixtures and 5,000 synthetic records.
     - All historical tickets (past check-in) are strictly marked 'Closed' or 'Resolved' (SLA STOPPED).
@@ -43,8 +43,9 @@ def seed_database(db: Session, engine_bind=None, total_tickets: int = 5000):
     Faker.seed(42)
     random.seed(42)
 
-    # Recreate tables cleanly using the active database bind (never touches global engine if passed a test session)
-    Base.metadata.drop_all(bind=target_bind)
+    # Recreate tables cleanly if drop_existing requested, otherwise ensure created
+    if drop_existing:
+        Base.metadata.drop_all(bind=target_bind)
     Base.metadata.create_all(bind=target_bind)
 
     print("Creating agencies...")
@@ -370,6 +371,7 @@ def seed_database(db: Session, engine_bind=None, total_tickets: int = 5000):
 if __name__ == "__main__":
     import argparse
     import sys
+    from sqlalchemy import inspect, text
     from backend.app.config import DATABASE_URL
     from backend.app.database import engine
 
@@ -386,9 +388,27 @@ if __name__ == "__main__":
         print(f"Safety Check Failed: DATABASE_URL '{DATABASE_URL}' does not appear to be a local dev SQLite database (opsdesk.db). Pass --yes to force.")
         sys.exit(1)
 
+    inspector = inspect(engine)
+    has_tickets_table = inspector.has_table("tickets")
+    existing_count = 0
+    if has_tickets_table:
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT COUNT(*) FROM tickets"))
+            existing_count = result.scalar() or 0
+
+    if existing_count > 0 and not args.reset:
+        print(f"Error: Database already contains {existing_count} tickets. Use --reset to drop tables and re-seed.")
+        sys.exit(1)
+
+    if args.reset:
+        print(f"Resetting database schema on '{DATABASE_URL}'...")
+        Base.metadata.drop_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
+        print("Schema reset complete.")
+
     print(f"Starting database seed process (reset={args.reset}, tickets={args.tickets}, target='{DATABASE_URL}')...")
     db = SessionLocal()
     try:
-        seed_database(db, engine_bind=engine, total_tickets=args.tickets)
+        seed_database(db, engine_bind=engine, total_tickets=args.tickets, drop_existing=False)
     finally:
         db.close()

@@ -13,6 +13,20 @@ ALLOWED_INTENTS = Literal[
     "Unclassified",
 ]
 
+VALID_TICKET_STATUSES = Literal[
+    "New",
+    "Open",
+    "Pending",
+    "Escalated",
+    "Resolved",
+    "Closed"
+]
+
+MESSAGE_TYPES = Literal[
+    "PublicReply",
+    "InternalNote"
+]
+
 EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 def normalize_utc_datetime(v: Any) -> datetime:
@@ -48,7 +62,7 @@ class TicketAssignSchema(BaseModel):
     agent_id: str = Field(..., min_length=1, max_length=100)
 
 class TicketStatusUpdateSchema(BaseModel):
-    status: str = Field(..., min_length=1, max_length=50)
+    status: VALID_TICKET_STATUSES
 
 class TicketEscalateSchema(BaseModel):
     reason: str = Field(..., min_length=1, max_length=1000)
@@ -58,7 +72,7 @@ class TicketTransferSchema(BaseModel):
     reason: str = Field(..., min_length=1, max_length=1000)
 
 class MessageCreateSchema(BaseModel):
-    message_type: str = Field(..., description="'PublicReply' or 'InternalNote'")
+    message_type: MESSAGE_TYPES = Field(..., description="'PublicReply' or 'InternalNote'")
     content: str = Field(..., min_length=1, max_length=5000)
 
 class SideThreadCreateSchema(BaseModel):
