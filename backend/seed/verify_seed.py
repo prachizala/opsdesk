@@ -2,8 +2,8 @@ import sqlite3
 from datetime import datetime
 from backend.services.sla_engine import evaluate_travel_sla
 
-def run_checks():
-    conn = sqlite3.connect("opsdesk.db")
+def run_checks(db_path: str = "opsdesk.db"):
+    conn = sqlite3.connect(db_path)
     c = conn.cursor()
 
     print("=== 1. TOTAL TICKETS COUNT ===")
@@ -42,6 +42,26 @@ def run_checks():
 
     for st, cnt in sla_counts.items():
         print(f"{st}: {cnt}")
+
+    print("\n=== 5. ESCALATED TICKETS ASSIGNEE BREAKDOWN ===")
+    c.execute("""
+    SELECT assigned_to, COUNT(*) 
+    FROM tickets 
+    WHERE status = 'Escalated' 
+    GROUP BY assigned_to
+    """)
+    for assignee, cnt in c.fetchall():
+        print(f"Assigned to {assignee}: {cnt}")
+
+    print("\n=== 6. NON-ESCALATED ASSIGNED AGENTS BREAKDOWN ===")
+    c.execute("""
+    SELECT assigned_to, COUNT(*) 
+    FROM tickets 
+    WHERE status != 'Escalated' AND assigned_to IS NOT NULL 
+    GROUP BY assigned_to
+    """)
+    for assignee, cnt in c.fetchall():
+        print(f"Assigned to {assignee}: {cnt}")
 
     conn.close()
 

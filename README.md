@@ -9,6 +9,8 @@ OpsDesk replaces fragmented ticketing in travel operations with context-linked c
 - **Transfer-Proof Supplier Threads:** Decouples supplier conversation recipients from assigned agents, preserving threads across transfers.
 - **Uncapped Ops Data Path:** Eliminates artificial 3,000-row export barriers via direct database streaming.
 
+> **Note on Demo Fixtures:** In demo fixtures TCK-1004 and TCK-1006, the Last Cancellation Date (LCD) is intentionally placed equal to or after the check-in date so that guest check-in proximity directly acts as the controlling urgency factor.
+
 ---
 
 ## Modular Architecture & Sidecar Contracts
