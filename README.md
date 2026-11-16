@@ -9,6 +9,31 @@ OpsDesk replaces fragmented ticketing in travel operations with context-linked c
 - **Transfer-Proof Supplier Threads:** Decouples supplier conversation recipients from assigned agents, preserving threads across transfers.
 - **Uncapped Ops Data Path:** Eliminates artificial 3,000-row export barriers via direct database streaming.
 
+> **Note on Demo Fixtures:** In demo fixtures TCK-1004 and TCK-1006, the Last Cancellation Date (LCD) is intentionally placed equal to or after the check-in date so that guest check-in proximity directly acts as the controlling urgency factor.
+
+---
+
+## MVP Implementation Status (TBO Problem Statement Alignment)
+The implementation directly maps to the requirements specified in the problem statement (*Zendesk-Darwin box Automation.pdf*, pages 1–7):
+
+| Feature / MVP | Problem Statement Requirement | Status | Implementation Details |
+|---|---|---|---|
+| **MVP-1: TBOH Linkage & 360 View** | First-class booking reference grouping without Zendesk add-on fee | **Implemented** | `TicketLink` model, `GET /api/tickets/{id}/links`, `POST /api/tickets/{id}/links`, and `view=linked` view. |
+| **MVP-2: Travel-Aware SLA Engine** | Dynamic countdown based on check-in proximity and LCD date | **Implemented** | `backend/services/sla_engine.py`, verified against `contracts/golden_vectors.json`. |
+| **MVP-3: 2-Tier Routing Engine** | Tier-1 regional desk assignment + Tier-2 dynamic queue priority | **Implemented** | `backend/services/routing_engine.py`, MEA/APAC/EUR desks, priority weights. |
+| **MVP-4: Transfer-Proof Supplier Threads** | Side conversation threads preserved across agent handoffs | **Implemented** | `POST /api/tickets/{id}/transfer`, side conversation recipients decoupled from `assigned_to`. |
+| **MVP-5: Proactive Insights & Clustering** | Root cause clustering across tickets sharing suppliers/hotels | **Pending** | Scheduled for Milestone 3 (clustering pipeline & automated theme detection). |
+| **MVP-6: Uncapped Operations Export** | Streaming export overcoming artificial 3,000-row tool barriers | **Partial** | FastAPI chunked streaming fallback implemented (`GET /api/export/tickets.csv`); standalone Go daemon pending Milestone 3. |
+| **MVP-7: AI Intent Classifier** | Intent extraction and smart triage suggestions | **Implemented** | `backend/services/intent_classifier.py` (regex rules + optional Gemini API fallback). |
+
+---
+
+## Datetime & Timezone Decision
+The backend consistently utilizes naive UTC datetimes (`datetime.utcnow()`) across SQLite persistence, Pydantic schemas, routing calculations, and SLA evaluation. 
+- In development (SQLite), datetimes are stored as ISO 8601 strings in UTC.
+- In production (PostgreSQL), columns use `TIMESTAMP WITHOUT TIME ZONE` stored strictly in UTC to prevent daylight savings anomalies and database server timezone drift.
+- Client applications (Next.js 15 frontend) receive ISO 8601 UTC strings and format them into local agency or agent timezones at presentation time.
+
 ---
 
 ## Modular Architecture & Sidecar Contracts

@@ -1,13 +1,20 @@
 import os
 import json
+import uuid
+import sqlite3
+import tempfile
 from datetime import datetime, timedelta
 import pytest
-from sqlalchemy.orm import Session
-from backend.app.database import engine, Base, SessionLocal
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
+
+from backend.app.database import Base, get_db
 from backend.app.models import (
     Agency, User, Ticket, TicketLink, SideConversation,
     SideConversationRecipient, TicketTheme, EventOutbox, TicketMessage
 )
+from backend.app.main import app
 from backend.services.routing_engine import (
     CandidateAgent,
     select_agent_tier1,
@@ -18,7 +25,33 @@ from backend.services.intent_classifier import suggest_ticket_intent
 from backend.seed.seed_data import seed_database
 
 # ============================================================================
-# 1. ROUTING ENGINE TESTS
+# 1. DATABASE ISOLATION VERIFICATION TEST
+# ============================================================================
+
+def test_dev_database_isolation(dev_db_initial_state):
+    """
+    PROVE TEST DB ISOLATION:
+    Verifies that the development database (opsdesk.db) remains untouched
+    with exactly 5,000 seeded tickets and its mtime is unchanged after test suite operations.
+    """
+    path = dev_db_initial_state["path"]
+    initial_mtime = dev_db_initial_state["mtime"]
+    initial_count = dev_db_initial_state["count"]
+
+    assert os.path.exists(path), "Development database opsdesk.db must exist"
+    current_mtime = os.path.getmtime(path)
+    assert current_mtime == initial_mtime, f"Dev DB mtime was modified: {current_mtime} != {initial_mtime}"
+
+    conn = sqlite3.connect(path)
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM tickets")
+    current_count = c.fetchone()[0]
+    conn.close()
+    assert current_count == initial_count == 5000, f"Expected dev DB to hold 5000 tickets, found {current_count}"
+
+
+# ============================================================================
+# 2. ROUTING ENGINE TESTS
 # ============================================================================
 
 def test_routing_region_match():
@@ -27,7 +60,6 @@ def test_routing_region_match():
         CandidateAgent(id="USR-1", name="Aisha", region="MEA", is_available=True, active_ticket_count=2),
         CandidateAgent(id="USR-2", name="Rahul", region="APAC", is_available=True, active_ticket_count=0),
     ]
-    # AE maps to MEA
     chosen_id, reason = select_agent_tier1("AE", agents)
     assert chosen_id == "USR-1"
     assert "Region=MEA match" in reason
@@ -59,7 +91,6 @@ def test_routing_workload_tie_breaking():
         CandidateAgent(id="USR-A", name="Alice", region="MEA", is_available=True, active_ticket_count=1),
     ]
     chosen_id, reason = select_agent_tier1("AE", agents)
-    # Sorted by (active_ticket_count, id) -> USR-A wins
     assert chosen_id == "USR-A"
 
 def test_routing_tier2_queue_score():
@@ -76,12 +107,11 @@ def test_routing_tier2_queue_score():
         now=now
     )
     assert score_urgent_imminent > score_low_distant
-    # Urgent base 1000 + imminent modifier 2000 = 3000
     assert score_urgent_imminent == 3000.0
 
 
 # ============================================================================
-# 2. SLA ENGINE TESTS
+# 3. SLA ENGINE TESTS
 # ============================================================================
 
 def test_sla_stopped_on_closed_or_resolved():
@@ -169,7 +199,7 @@ def test_sla_priority_modifies_threshold():
 
 
 # ============================================================================
-# 3. GOLDEN VECTORS COMPLIANCE TEST (CONTRACTS VERIFICATION)
+# 4. GOLDEN VECTORS COMPLIANCE TEST (CONTRACTS VERIFICATION)
 # ============================================================================
 
 def test_contracts_golden_vectors():
@@ -220,7 +250,7 @@ def test_contracts_golden_vectors():
 
 
 # ============================================================================
-# 4. INTENT CLASSIFIER REGEX & PRECEDENCE TESTS
+# 5. INTENT CLASSIFIER REGEX & PRECEDENCE TESTS
 # ============================================================================
 
 def test_intent_regex_refunded_inflection():
@@ -266,104 +296,8 @@ def test_intent_no_match_unclassified_fallback():
 
 
 # ============================================================================
-# 5. OUTBOX TRANSACTIONAL LOGGING TESTS (DATA LAYER & CONTRACT VERIFICATION)
+# 6. SEED DATA GENERATOR TESTS (RUN ON ISOLATED TEST DB)
 # ============================================================================
-
-def test_outbox_ticket_created_event(db_session: Session):
-    """
-    NOTE ON MILESTONE SCOPE:
-    In Milestone 1, EventOutbox rows are validated at the data model and schema contract layer.
-    Automated service-level emission hooks (FastAPI route handlers writing Ticket and EventOutbox
-    in a single atomic transaction) are scheduled for Milestone 2 implementation.
-    This test verifies outbox persistence, JSON payload serialization, and public visibility scoping.
-    """
-    now = datetime.utcnow()
-    t = Ticket(
-        id="TCK-OUTBOX-1",
-        tboh_id="TBOH-99881",
-        agency_id="AGY-001",
-        title="Test Outbox Creation",
-        description="Ticket created for testing outbox emission",
-        intent="Refund Request",
-        priority="Medium",
-        status="New",
-        check_in_date=now + timedelta(days=2),
-        lcd_date=now + timedelta(days=2),
-        created_at=now
-    )
-    outbox_event = EventOutbox(
-        id="EVT-001",
-        event_type="ticket.created",
-        ticket_id=t.id,
-        agency_id=t.agency_id,
-        visibility="public",
-        payload_json=json.dumps({"ticket_id": t.id, "tboh_id": t.tboh_id, "status": "New"}),
-        created_at=now
-    )
-    db_session.add(t)
-    db_session.add(outbox_event)
-    db_session.commit()
-
-    ev = db_session.query(EventOutbox).filter(EventOutbox.id == "EVT-001").first()
-    assert ev is not None
-    assert ev.visibility == "public"
-    assert ev.event_type == "ticket.created"
-
-    # Clean up test records to preserve fixture counts
-    db_session.delete(ev)
-    db_session.delete(t)
-    db_session.commit()
-
-def test_outbox_internal_note_visibility(db_session: Session):
-    """
-    NOTE ON MILESTONE SCOPE:
-    Verifies that internal notes produce EventOutbox records with visibility='internal'.
-    This contract prevents agency requesters from receiving internal ops chatter over SSE.
-    """
-    now = datetime.utcnow()
-    msg = TicketMessage(
-        id="MSG-INT-1",
-        ticket_id="TCK-1004",
-        sender_id="USR-101",
-        message_type="InternalNote",
-        content="Internal ops note: supplier is lagging on confirmation",
-        created_at=now
-    )
-    outbox_event = EventOutbox(
-        id="EVT-002",
-        event_type="message.created",
-        ticket_id="TCK-1004",
-        agency_id="AGY-001",
-        visibility="internal",
-        payload_json=json.dumps({"message_id": msg.id, "type": "InternalNote"}),
-        created_at=now
-    )
-    db_session.add(msg)
-    db_session.add(outbox_event)
-    db_session.commit()
-
-    ev = db_session.query(EventOutbox).filter(EventOutbox.id == "EVT-002").first()
-    assert ev is not None
-    assert ev.visibility == "internal"
-    assert ev.event_type == "message.created"
-
-    # Clean up test records
-    db_session.delete(ev)
-    db_session.delete(msg)
-    db_session.commit()
-
-
-# ============================================================================
-# 6. SEED DATA GENERATOR TESTS
-# ============================================================================
-
-@pytest.fixture(scope="module")
-def db_session():
-    """Creates a seeded test database session."""
-    db = SessionLocal()
-    seed_database(db, total_tickets=5000)
-    yield db
-    db.close()
 
 def test_seed_row_count(db_session: Session):
     count = db_session.query(Ticket).count()
@@ -379,15 +313,19 @@ def test_seed_zero_open_tickets_with_past_checkin(db_session: Session):
     ).count()
     assert past_active_count == 0
 
-def test_seed_escalated_count(db_session: Session):
-    """Verify exactly 40 tickets are seeded with Escalated status."""
-    escalated_count = db_session.query(Ticket).filter(Ticket.status == "Escalated").count()
-    assert escalated_count == 40
+def test_seed_escalated_assigned_to_vikram(db_session: Session):
+    """Verify exactly 40 tickets are seeded with Escalated status and assigned to USR-103."""
+    escalated_tickets = db_session.query(Ticket).filter(Ticket.status == "Escalated").all()
+    assert len(escalated_tickets) == 40
+    for t in escalated_tickets:
+        assert t.assigned_to == "USR-103"
+        assert t.check_in_date > datetime.utcnow()
 
-def test_seed_assigned_agent_pool(db_session: Session):
-    """Verify assigned tickets are strictly assigned to Tier-1 desk agents USR-101 and USR-102."""
+def test_seed_non_escalated_assigned_pool(db_session: Session):
+    """Verify standard assigned tickets are strictly assigned to Tier-1 desk agents USR-101 and USR-102."""
     assigned_users = db_session.query(Ticket.assigned_to).filter(
-        Ticket.assigned_to.isnot(None)
+        Ticket.assigned_to.isnot(None),
+        Ticket.status != "Escalated"
     ).distinct().all()
     assigned_ids = {u[0] for u in assigned_users}
     assert assigned_ids.issubset({"USR-101", "USR-102"})
@@ -428,3 +366,310 @@ def test_seed_tboh_fixtures(db_session: Session):
     assert t1006.check_in_date > datetime.utcnow()
     assert t1006.lcd_date >= t1006.check_in_date
     assert "active cases" in t1006.routing_reason
+
+
+# ============================================================================
+# 7. FASTAPI ENDPOINTS & ROLE MATRIX TESTS (MILESTONE 2)
+# ============================================================================
+
+def test_auth_missing_header_401(client: TestClient):
+    """Missing X-User-Id header returns 401 Unauthorized."""
+    resp = client.get("/api/tickets")
+    assert resp.status_code == 401
+    assert "Missing X-User-Id" in resp.json()["detail"]
+
+def test_auth_unknown_user_401(client: TestClient):
+    """Non-existent X-User-Id returns 401 Unauthorized."""
+    resp = client.get("/api/tickets", headers={"X-User-Id": "USR-GHOST"})
+    assert resp.status_code == 401
+    assert "not found" in resp.json()["detail"]
+
+def test_requester_cannot_access_other_agency_ticket_403(client: TestClient):
+    """
+    CRITICAL MULTI-TENANT TEST:
+    USR-202 belongs to AGY-002 (Vectora Travel).
+    TCK-1004 belongs to AGY-001 (Krypton Voyages).
+    Accessing TCK-1004 must return 403 Forbidden.
+    """
+    resp = client.get("/api/tickets/TCK-1004", headers={"X-User-Id": "USR-202"})
+    assert resp.status_code == 403
+    assert "Forbidden" in resp.json()["detail"]
+
+def test_requester_sees_only_own_agency_in_list(client: TestClient):
+    """
+    Requesters list endpoint strictly limits results to their own agency.
+    """
+    resp = client.get("/api/tickets", headers={"X-User-Id": "USR-201"})
+    assert resp.status_code == 200
+    data = resp.json()
+    for t in data["tickets"]:
+        assert t["agency_id"] == "AGY-001"
+
+def test_requester_client_sent_agency_id_is_ignored(client: TestClient):
+    """
+    Security check: Even if a requester sends agency_id='AGY-003' in the POST body,
+    the server ignores it and assigns their authentic agency_id ('AGY-001').
+    """
+    now = datetime.utcnow()
+    payload = {
+        "title": "Spoof Agency Attempt",
+        "description": "Attempting to create ticket for AGY-003",
+        "tboh_id": "TBOH-88221",
+        "priority": "Medium",
+        "check_in_date": (now + timedelta(days=5)).isoformat(),
+        "lcd_date": (now + timedelta(days=5)).isoformat(),
+        "agency_id": "AGY-003"  # Attacker attempt
+    }
+    resp = client.post("/api/tickets", json=payload, headers={"X-User-Id": "USR-201"})
+    assert resp.status_code == 201
+    created = resp.json()
+    assert created["agency_id"] == "AGY-001"  # Overridden by server-side DB session
+
+def test_requester_cannot_see_internal_notes(client: TestClient, db_session: Session):
+    """
+    Requesters viewing their own ticket detail must NEVER see InternalNote messages.
+    Internal staff CAN see InternalNote messages.
+    """
+    # 1. Post an InternalNote as Aisha (USR-101) on TCK-1004
+    note_resp = client.post(
+        "/api/tickets/TCK-1004/messages",
+        json={"message_type": "InternalNote", "content": "Sensitive hotel dispute note"},
+        headers={"X-User-Id": "USR-101"}
+    )
+    assert note_resp.status_code == 201
+    assert note_resp.json()["visibility"] == "internal"
+
+    # 2. Requester (USR-201) fetches ticket TCK-1004
+    req_resp = client.get("/api/tickets/TCK-1004", headers={"X-User-Id": "USR-201"})
+    assert req_resp.status_code == 200
+    for msg in req_resp.json()["messages"]:
+        assert msg["message_type"] != "InternalNote"
+        assert "Sensitive hotel dispute note" not in msg["content"]
+
+    # 3. Agent (USR-101) fetches ticket TCK-1004 and CAN see the note
+    agent_resp = client.get("/api/tickets/TCK-1004", headers={"X-User-Id": "USR-101"})
+    assert agent_resp.status_code == 200
+    contents = [m["content"] for m in agent_resp.json()["messages"]]
+    assert "Sensitive hotel dispute note" in contents
+
+def test_requester_cannot_post_internal_note_403(client: TestClient):
+    """Requesters posting message_type='InternalNote' receive 403 Forbidden."""
+    resp = client.post(
+        "/api/tickets/TCK-1004/messages",
+        json={"message_type": "InternalNote", "content": "Illegitimate note attempt"},
+        headers={"X-User-Id": "USR-201"}
+    )
+    assert resp.status_code == 403
+
+def test_requester_cannot_access_side_threads_403(client: TestClient):
+    """Requesters attempting to view or create side conversations receive 403 Forbidden."""
+    get_resp = client.get("/api/tickets/TCK-1005/side-threads", headers={"X-User-Id": "USR-201"})
+    assert get_resp.status_code == 403
+
+    post_resp = client.post(
+        "/api/tickets/TCK-1005/side-threads",
+        json={
+            "supplier_name": "Supplier Direct",
+            "subject": "Direct supplier question",
+            "recipients": ["vendor@example.com"],
+            "initial_message": "Hello"
+        },
+        headers={"X-User-Id": "USR-201"}
+    )
+    assert post_resp.status_code == 403
+
+def test_ticket_transfer_preserves_side_conversation_recipients(client: TestClient):
+    """
+    MVP-4 CORE TEST:
+    Transferring a ticket from Aisha (USR-101) to Rahul (USR-102) preserves
+    all supplier side conversation recipients without wiping or overwriting them,
+    and updates routing_reason to reflect the transfer path.
+    """
+    # Check TCK-1005 initial recipients and initial assigned agent
+    detail_before = client.get("/api/tickets/TCK-1005", headers={"X-User-Id": "USR-101"}).json()
+    assert detail_before["assigned_to"] == "USR-101"
+    recipients_before = detail_before["side_conversations"][0]["recipients"]
+    assert "reservations@vendor.example.com" in recipients_before
+
+    # Perform transfer to USR-102
+    transfer_resp = client.post(
+        "/api/tickets/TCK-1005/transfer",
+        json={"target_agent_id": "USR-102", "reason": "Shift handover to Rahul Verma"},
+        headers={"X-User-Id": "USR-101"}
+    )
+    assert transfer_resp.status_code == 200
+    transfer_data = transfer_resp.json()
+    assert transfer_data["assigned_to"] == "USR-102"
+    assert transfer_data["total_recipients_preserved"] >= 2
+    assert "Transferred from USR-101" in transfer_data["routing_reason"]
+    assert "to USR-102" in transfer_data["routing_reason"]
+
+    # Verify recipients after transfer
+    detail_after = client.get("/api/tickets/TCK-1005", headers={"X-User-Id": "USR-102"}).json()
+    assert detail_after["assigned_to"] == "USR-102"
+    recipients_after = detail_after["side_conversations"][0]["recipients"]
+    assert recipients_after == recipients_before
+
+def test_ticket_transfer_to_same_agent_400(client: TestClient):
+    """
+    Attempting to transfer a ticket to the agent who is currently assigned returns 400 Bad Request.
+    """
+    # TCK-1005 is now assigned to USR-102 from previous test
+    resp = client.post(
+        "/api/tickets/TCK-1005/transfer",
+        json={"target_agent_id": "USR-102", "reason": "Redundant transfer attempt"},
+        headers={"X-User-Id": "USR-102"}
+    )
+    assert resp.status_code == 400
+    assert "already assigned" in resp.json()["detail"]
+
+def test_ticket_escalate_assigns_to_vikram_and_writes_outbox(client: TestClient, db_session: Session):
+    """
+    Escalating a ticket updates status to 'Escalated', reassigns to configured manager USR-103,
+    and records an event in events_outbox with free-text reason stripped from the public payload.
+    """
+    freetext_reason = "Confidential dispute with front desk management; potential legal threat."
+    resp = client.post(
+        "/api/tickets/TCK-1004/escalate",
+        json={"reason": freetext_reason},
+        headers={"X-User-Id": "USR-101"}
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["new_status"] == "Escalated"
+    assert data["assigned_to"] == "USR-103"
+
+    # Verify outbox entry
+    outbox = db_session.query(EventOutbox).filter(
+        EventOutbox.ticket_id == "TCK-1004",
+        EventOutbox.event_type == "ticket.escalated"
+    ).first()
+    assert outbox is not None
+    assert outbox.visibility == "public"
+    payload = json.loads(outbox.payload_json)
+    assert payload["assigned_to"] == "USR-103"
+    # CRITICAL: Free-text reason must NEVER be leaked in public event payload
+    assert "reason" not in payload
+
+    # Verify requester-scoped outbox query cannot see free-text reason
+    requester_events = db_session.query(EventOutbox).filter(
+        EventOutbox.agency_id == "AGY-001",
+        EventOutbox.visibility == "public"
+    ).all()
+    for ev in requester_events:
+        p = json.loads(ev.payload_json)
+        assert "reason" not in p
+        assert freetext_reason not in ev.payload_json
+
+def test_requester_cannot_update_ticket_status_403(client: TestClient):
+    """
+    Requesters calling POST /api/tickets/{id}/status receive 403 Forbidden.
+    Only internal operations staff are permitted to advance ticket lifecycle.
+    """
+    resp = client.post(
+        "/api/tickets/TCK-1004/status",
+        json={"status": "Pending"},
+        headers={"X-User-Id": "USR-201"}
+    )
+    assert resp.status_code == 403
+    assert "Forbidden" in resp.json()["detail"]
+
+def test_tickets_view_by_intent(client: TestClient):
+    """
+    view=by_intent with intent filter returns only matching tickets and accurate total count.
+    """
+    resp = client.get("/api/tickets?view=by_intent&intent=Refund+Request", headers={"X-User-Id": "USR-101"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] > 0
+    for t in data["tickets"]:
+        assert t["intent"] == "Refund Request"
+
+def test_tickets_view_by_intent_grouped(client: TestClient):
+    """
+    view=by_intent without specific intent parameter returns sorted intent list.
+    """
+    resp = client.get("/api/tickets?view=by_intent", headers={"X-User-Id": "USR-101"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] > 0
+
+def test_tickets_view_by_region(client: TestClient):
+    """
+    view=by_region for MEA staff (USR-101) returns tickets from MEA agencies.
+    """
+    resp = client.get("/api/tickets?view=by_region", headers={"X-User-Id": "USR-101"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] > 0
+
+def test_tickets_view_linked_and_requester_scoping(client: TestClient):
+    """
+    view=linked returns linked tickets.
+    Requester's linked view is strictly isolated to their own agency.
+    """
+    # Internal staff sees linked tickets across the platform
+    resp_staff = client.get("/api/tickets?view=linked", headers={"X-User-Id": "USR-101"})
+    assert resp_staff.status_code == 200
+    assert resp_staff.json()["total"] >= 2
+
+    # Requester USR-201 (AGY-001) only sees linked tickets within AGY-001
+    resp_req = client.get("/api/tickets?view=linked", headers={"X-User-Id": "USR-201"})
+    assert resp_req.status_code == 200
+    data_req = resp_req.json()
+    for t in data_req["tickets"]:
+        assert t["agency_id"] == "AGY-001"
+
+def test_tickets_total_count_before_pagination(client: TestClient):
+    """
+    GET /api/tickets returns total count reflecting all matching tickets before limit pagination.
+    """
+    resp = client.get("/api/tickets?view=triage&limit=5", headers={"X-User-Id": "USR-101"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["tickets"]) == 5
+    assert data["total"] > 5
+
+def test_events_schema_enum_parity():
+    """
+    Verifies that all event types emitted in backend/app/main.py are explicitly
+    defined in the contracts/events.schema.json event_type enum.
+    """
+    import re
+    contracts_path = os.path.join(os.getcwd(), "contracts", "events.schema.json")
+    with open(contracts_path, "r", encoding="utf-8") as f:
+        schema = json.load(f)
+    allowed_enums = set(schema["properties"]["event_type"]["enum"])
+
+    main_py_path = os.path.join(os.getcwd(), "backend", "app", "main.py")
+    with open(main_py_path, "r", encoding="utf-8") as f:
+        code = f.read()
+
+    emitted_types = set(re.findall(r'event_type=["\']([^"\']+)["\']', code))
+    assert len(emitted_types) > 0, "Expected to find emitted event types in main.py"
+    assert emitted_types.issubset(allowed_enums), f"Emitted types not in schema: {emitted_types - allowed_enums}"
+
+def test_invalid_status_transition_returns_409(client: TestClient):
+    """
+    Attempting an illegal transition in the status graph (e.g. Closed -> Escalated)
+    returns 409 Conflict.
+    """
+    resp = client.post(
+        "/api/tickets/TCK-1001/status",
+        json={"status": "Escalated"},
+        headers={"X-User-Id": "USR-101"}
+    )
+    assert resp.status_code == 409
+    assert "Invalid status transition" in resp.json()["detail"]
+
+def test_suggest_intent_endpoint(client: TestClient):
+    """POST /api/ai/suggest-intent returns rule-classified category."""
+    resp = client.post(
+        "/api/ai/suggest-intent",
+        json={"title": "Voucher Resend Request", "description": "Please resend confirmation voucher immediately."},
+        headers={"X-User-Id": "USR-101"}
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["intent"] == "Voucher Resend"
+    assert data["source"] == "regex_rule"

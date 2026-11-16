@@ -16,6 +16,7 @@
         "ticket.assigned",
         "ticket.unassigned",
         "ticket.escalated",
+        "ticket.transferred",
         "ticket.status_changed",
         "message.created",
         "side_conversation.created",
