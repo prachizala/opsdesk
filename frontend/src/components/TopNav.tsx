@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useUser } from "@/context/UserContext";
 import { DEMO_USERS } from "@/lib/types";
 import { Avatar } from "@/components/ui/Avatar";
-import { Search, ChevronDown, Check, ShieldAlert, X } from "lucide-react";
+import { Search, ChevronDown, Check, ShieldAlert, X, AlertCircle, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function LogoMark({ className = "w-6 h-6" }: { className?: string }) {
@@ -39,6 +39,56 @@ export function TopNav() {
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // API unreachable monitoring state
+  const [isApiDown, setIsApiDown] = useState<boolean>(false);
+  const [retryingIn, setRetryingIn] = useState<number>(15);
+  const [isRetrying, setIsRetrying] = useState<boolean>(false);
+
+  const checkApiHealth = useCallback(async () => {
+    setIsRetrying(true);
+    try {
+      const res = await fetch("http://127.0.0.1:8000/docs", {
+        method: "HEAD",
+        mode: "no-cors",
+      }).catch(() => null);
+
+      if (res !== null) {
+        setIsApiDown(false);
+        setRetryingIn(15);
+      } else {
+        setIsApiDown(true);
+      }
+    } catch {
+      setIsApiDown(true);
+    } finally {
+      setIsRetrying(false);
+    }
+  }, []);
+
+  // Periodic API health check
+  useEffect(() => {
+    checkApiHealth();
+    const interval = setInterval(() => {
+      checkApiHealth();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [checkApiHealth]);
+
+  // Countdown timer when API is detected down
+  useEffect(() => {
+    if (!isApiDown) return;
+    const timer = setInterval(() => {
+      setRetryingIn((prev) => {
+        if (prev <= 1) {
+          checkApiHealth();
+          return 15;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isApiDown, checkApiHealth]);
+
   // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -61,8 +111,33 @@ export function TopNav() {
 
   return (
     <header className="sticky top-0 z-40 bg-surface border-b border-border shadow-xs">
-      {/* Persistent Slim Demo Auth Warning Banner (32px, session dismissable) */}
-      {!isBannerDismissed && (
+      {/* 1. API Unreachable Error State Banner (persistent red-50 bar) */}
+      {isApiDown && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="bg-red-50 border-b border-red-200 h-8 px-4 text-caption text-red-800 flex items-center justify-between transition-subtle"
+        >
+          <div className="flex items-center gap-2 mx-auto">
+            <AlertCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />
+            <span>
+              Operations API unreachable — changes cannot be saved. Retrying in {retryingIn}s...
+            </span>
+            <button
+              type="button"
+              onClick={checkApiHealth}
+              disabled={isRetrying}
+              className="underline font-semibold hover:text-red-950 ml-1.5 cursor-pointer disabled:opacity-50 inline-flex items-center gap-1"
+            >
+              <RefreshCw className={cn("w-3 h-3", isRetrying && "animate-spin")} />
+              Retry now
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Persistent Slim Demo Auth Warning Banner (32px, session dismissable) */}
+      {!isBannerDismissed && !isApiDown && (
         <div className="bg-amber-50 border-b border-amber-200 h-8 px-4 text-caption text-amber-800 flex items-center justify-between transition-subtle">
           <div className="flex items-center gap-2 mx-auto">
             <ShieldAlert className="w-3.5 h-3.5 text-amber-600 shrink-0" />
@@ -81,13 +156,14 @@ export function TopNav() {
         </div>
       )}
 
-      {/* Main 56px Top Bar */}
-      <div className="w-full max-w-[1440px] mx-auto px-6 h-14 flex items-center justify-between gap-4">
+      {/* 3. Main 56px Top Bar */}
+      <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
         {/* Left: Geometric Logo Mark + OpsDesk Brand */}
         <div className="flex items-center gap-6">
           <Link
             href="/"
-            className="flex items-center gap-2.5 text-content-primary hover:opacity-90 transition-subtle focus-visible:outline-brand-500 rounded-input"
+            className="flex items-center gap-2.5 text-content-primary hover:opacity-90 transition-subtle focus-visible:outline-brand-500 rounded-input min-h-[44px] min-w-[44px]"
+            aria-label="OpsDesk Home"
           >
             <LogoMark className="w-7 h-7 text-brand-600" />
             <div className="flex items-center gap-2">
@@ -106,6 +182,7 @@ export function TopNav() {
           <button
             type="button"
             onClick={openCommandPalette}
+            aria-label="Search cases and bookings (Ctrl+K)"
             className="w-full h-9 flex items-center justify-between px-3 rounded-input bg-surface-subtle text-caption text-content-secondary border border-border hover:border-border-strong transition-subtle cursor-pointer select-none"
           >
             <span className="flex items-center gap-2">
@@ -125,7 +202,8 @@ export function TopNav() {
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             aria-haspopup="listbox"
             aria-expanded={isDropdownOpen}
-            className="flex items-center gap-2.5 p-1.5 rounded-input hover:bg-surface-subtle transition-subtle cursor-pointer border border-transparent hover:border-border"
+            aria-label={`Active user persona: ${currentUser.name} (${currentUser.role})`}
+            className="flex items-center gap-2.5 p-1.5 rounded-input hover:bg-surface-subtle transition-subtle cursor-pointer border border-transparent hover:border-border min-h-[44px]"
           >
             <Avatar name={currentUser.name} id={currentUser.id} size="sm" />
             <div className="hidden md:flex flex-col text-left">
@@ -165,7 +243,7 @@ export function TopNav() {
                         setIsDropdownOpen(false);
                       }}
                       className={cn(
-                        "w-full flex items-center justify-between px-3 py-2 text-left hover:bg-surface-subtle transition-subtle cursor-pointer",
+                        "w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-surface-subtle transition-subtle cursor-pointer min-h-[44px]",
                         isSelected && "bg-brand-50/70"
                       )}
                     >
