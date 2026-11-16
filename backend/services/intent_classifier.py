@@ -70,7 +70,7 @@ def suggest_ticket_intent(subject: str, body: str) -> Tuple[str, str]:
 
     # Step 2: Fallback to Gemini structured call via google-genai SDK
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
-    model_name = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite").strip()
+    model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
 
     if not api_key:
         return "Unclassified", "fallback_unclassified"
