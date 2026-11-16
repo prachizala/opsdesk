@@ -59,7 +59,7 @@
     "/api/tickets": {
       "get": {
         "summary": "List Tickets",
-        "description": "Lists tickets with computed travel SLA countdown and Tier-2 queue scores.\nRequesters are strictly confined to their own agency.",
+        "description": "Lists tickets with computed travel SLA countdown and Tier-2 queue scores.\nRequesters are strictly confined to their own agency.\nReturns the real total count matching query criteria prior to limit pagination.",
         "operationId": "list_tickets_api_tickets_get",
         "parameters": [
           {
@@ -73,6 +73,24 @@
               "title": "View"
             },
             "description": "View filter: triage, my_queue, by_region, by_intent, linked"
+          },
+          {
+            "name": "intent",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional intent category filter",
+              "title": "Intent"
+            },
+            "description": "Optional intent category filter"
           },
           {
             "name": "limit",
@@ -329,7 +347,7 @@
     "/api/tickets/{ticket_id}/status": {
       "post": {
         "summary": "Update Ticket Status",
-        "description": "Transitions ticket status according to ALLOWED_STATUS_TRANSITIONS graph.\nReturns 409 Conflict if transition is not permitted.",
+        "description": "Transitions ticket status according to ALLOWED_STATUS_TRANSITIONS graph.\nStatus transitions are restricted strictly to internal operations staff (Requesters get 403).\nReturns 409 Conflict if transition is not permitted.",
         "operationId": "update_ticket_status_api_tickets__ticket_id__status_post",
         "parameters": [
           {
@@ -386,7 +404,7 @@
     "/api/tickets/{ticket_id}/escalate": {
       "post": {
         "summary": "Escalate Ticket",
-        "description": "Escalates an operations ticket:\n- Sets status to 'Escalated'\n- Reassigns ticket to Escalation Manager USR-103 (Vikram Malhotra)\n- Records reason and emits public outbox event.",
+        "description": "Escalates an operations ticket:\n- Sets status to 'Escalated'\n- Reassigns ticket to configured Escalation Manager (DEFAULT_ESCALATION_MANAGER_ID)\n- Records reason in audit log.\n- Public outbox payload excludes internal free-text reason to prevent operational leakage.",
         "operationId": "escalate_ticket_api_tickets__ticket_id__escalate_post",
         "parameters": [
           {

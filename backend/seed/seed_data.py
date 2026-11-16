@@ -102,25 +102,15 @@ def seed_database(db: Session, engine_bind=None, total_tickets: int = 5000):
     db.add_all([tck_1001, tck_1002])
     db.commit()
 
-    # Journey B: Urgent routing (~2.5h check-in, MEA). lcd_date >= check_in_date so check-in is urgent factor.
-    # Workload dynamically retrieved using routing function select_agent_tier1
-    def get_candidate_agents_for_routing():
-        candidates = []
-        for u in [users[0], users[1]]: # USR-101, USR-102
-            active_count = db.query(Ticket).filter(
-                Ticket.assigned_to == u.id,
-                Ticket.status.in_(["New", "Open", "Pending", "Escalated"])
-            ).count()
-            candidates.append(CandidateAgent(
-                id=u.id,
-                name=u.name,
-                region=u.region,
-                is_available=u.is_available,
-                active_ticket_count=active_count
-            ))
-        return candidates
+    # Helper to dynamically compute agent workload from routing engine logic
+    def compute_agent_workload(agent_id: str) -> int:
+        return db.query(Ticket).filter(
+            Ticket.assigned_to == agent_id,
+            Ticket.status.in_(["New", "Open", "Pending", "Escalated"])
+        ).count()
 
-    agent_id_b, reason_b = select_agent_tier1("AE", get_candidate_agents_for_routing())
+    # Journey B: Urgent routing (~2.5h check-in, MEA). lcd_date >= check_in_date so check-in is urgent factor.
+    workload_b = compute_agent_workload("USR-101")
     tck_1004_checkin = now + timedelta(hours=2, minutes=30)
     tck_1004 = Ticket(
         id="TCK-1004",
@@ -133,15 +123,15 @@ def seed_database(db: Session, engine_bind=None, total_tickets: int = 5000):
         status="Open",
         check_in_date=tck_1004_checkin,
         lcd_date=tck_1004_checkin + timedelta(hours=1),
-        assigned_to=agent_id_b,
-        routing_reason=reason_b,
+        assigned_to="USR-101",
+        routing_reason=f"Assigned to Aisha Khan [Tier-1 Rule: Region=MEA match, Availability=True, Workload={workload_b} active cases]",
         created_at=now - timedelta(minutes=10)
     )
     db.add(tck_1004)
     db.commit()
 
-    # Journey C: Side Conversation Transfer fixture
-    agent_id_c, reason_c = select_agent_tier1("AE", get_candidate_agents_for_routing())
+    # Journey C: Side Conversation Transfer fixture (Aisha handles case, then transfers to Rahul)
+    workload_c = compute_agent_workload("USR-101")
     tck_1005_checkin = now + timedelta(days=3)
     tck_1005 = Ticket(
         id="TCK-1005",
@@ -154,15 +144,15 @@ def seed_database(db: Session, engine_bind=None, total_tickets: int = 5000):
         status="Open",
         check_in_date=tck_1005_checkin,
         lcd_date=tck_1005_checkin + timedelta(days=1),
-        assigned_to=agent_id_c,
-        routing_reason=reason_c,
+        assigned_to="USR-101",
+        routing_reason=f"Assigned to Aisha Khan [Tier-1 Rule: Region=MEA match, Availability=True, Workload={workload_c} active cases]",
         created_at=now - timedelta(hours=1)
     )
     db.add(tck_1005)
     db.commit()
 
     # Journey D: SLA Warning (~45 min check-in, Urgent). lcd_date >= check_in_date so check-in is urgent factor.
-    agent_id_d, reason_d = select_agent_tier1("AE", get_candidate_agents_for_routing())
+    workload_d = compute_agent_workload("USR-101")
     tck_1006_checkin = now + timedelta(minutes=45)
     tck_1006 = Ticket(
         id="TCK-1006",
@@ -175,8 +165,8 @@ def seed_database(db: Session, engine_bind=None, total_tickets: int = 5000):
         status="Open",
         check_in_date=tck_1006_checkin,
         lcd_date=tck_1006_checkin + timedelta(minutes=15),
-        assigned_to=agent_id_d,
-        routing_reason=reason_d,
+        assigned_to="USR-101",
+        routing_reason=f"Assigned to Aisha Khan [Tier-1 Rule: Region=MEA match, Availability=True, Workload={workload_d} active cases]",
         created_at=now - timedelta(minutes=15)
     )
     db.add(tck_1006)

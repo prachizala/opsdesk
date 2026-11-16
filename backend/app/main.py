@@ -19,6 +19,10 @@ from backend.app.schemas import (
 )
 from backend.app.auth import get_current_user
 from backend.app.events import emit_outbox_event, record_audit_log
+from backend.config.routing_config import (
+    DEFAULT_ESCALATION_MANAGER_ID,
+    REGION_MAPPING
+)
 from backend.services.sla_engine import evaluate_travel_sla
 from backend.services.routing_engine import (
     CandidateAgent, select_agent_tier1, calculate_queue_score_tier2
@@ -63,6 +67,7 @@ def api_suggest_intent(
 @app.get("/api/tickets")
 def list_tickets(
     view: str = Query("triage", description="View filter: triage, my_queue, by_region, by_intent, linked"),
+    intent: Optional[str] = Query(None, description="Optional intent category filter"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
@@ -71,6 +76,7 @@ def list_tickets(
     """
     Lists tickets with computed travel SLA countdown and Tier-2 queue scores.
     Requesters are strictly confined to their own agency.
+    Returns the real total count matching query criteria prior to limit pagination.
     """
     query = db.query(Ticket)
 
@@ -78,9 +84,23 @@ def list_tickets(
     if current_user.role == "Requester":
         query = query.filter(Ticket.agency_id == current_user.agency_id)
         if view == "linked":
-            # Show tickets that have links within this agency
-            linked_ids = db.query(TicketLink.ticket_id).union(db.query(TicketLink.linked_ticket_id)).subquery()
+            # Linked tickets strictly within this requester's agency
+            agency_ticket_ids = db.query(Ticket.id).filter(Ticket.agency_id == current_user.agency_id)
+            linked_ids = db.query(TicketLink.ticket_id).filter(
+                TicketLink.ticket_id.in_(agency_ticket_ids),
+                TicketLink.linked_ticket_id.in_(agency_ticket_ids)
+            ).union(
+                db.query(TicketLink.linked_ticket_id).filter(
+                    TicketLink.ticket_id.in_(agency_ticket_ids),
+                    TicketLink.linked_ticket_id.in_(agency_ticket_ids)
+                )
+            )
             query = query.filter(Ticket.id.in_(linked_ids))
+        elif view == "by_intent":
+            if intent:
+                query = query.filter(Ticket.intent == intent)
+            else:
+                query = query.order_by(Ticket.intent, Ticket.created_at.desc())
     else:
         # Internal Staff views
         if view == "my_queue":
@@ -90,19 +110,25 @@ def list_tickets(
             )
         elif view == "by_region":
             # Filter tickets where the agency country matches user's region
-            query = query.join(Agency).filter(
-                (current_user.region == "MEA") & (Agency.country_code.in_(["AE", "SA", "QA", "OM", "EG"])) |
-                (current_user.region == "APAC") & (Agency.country_code.in_(["IN", "SG", "MY", "TH", "ID"])) |
-                (current_user.region == "EUR") & (Agency.country_code.in_(["UK", "DE", "FR", "ES", "IT"]))
-            )
+            regional_countries = [c for c, r in REGION_MAPPING.items() if r == current_user.region]
+            if regional_countries:
+                query = query.join(Agency).filter(Agency.country_code.in_(regional_countries))
+            else:
+                query = query.join(Agency)
         elif view == "linked":
             # Linked tickets across system
-            linked_subquery = db.query(TicketLink.ticket_id).union(db.query(TicketLink.linked_ticket_id)).subquery()
-            query = query.filter(Ticket.id.in_(linked_subquery))
+            linked_query = db.query(TicketLink.ticket_id).union(db.query(TicketLink.linked_ticket_id))
+            query = query.filter(Ticket.id.in_(linked_query))
+        elif view == "by_intent":
+            if intent:
+                query = query.filter(Ticket.intent == intent)
+            else:
+                query = query.order_by(Ticket.intent, Ticket.created_at.desc())
         elif view == "triage":
             # Active queue sorted by priority/urgency
             query = query.filter(Ticket.status.in_(["New", "Open", "Pending", "Escalated"]))
 
+    total_count = query.count()
     tickets = query.offset(offset).limit(limit).all()
 
     now = datetime.utcnow()
@@ -141,7 +167,7 @@ def list_tickets(
     if view == "triage":
         results.sort(key=lambda x: x["queue_score"], reverse=True)
 
-    return {"total": len(results), "tickets": results}
+    return {"total": total_count, "tickets": results}
 
 
 @app.post("/api/tickets", status_code=status.HTTP_201_CREATED)
@@ -463,14 +489,18 @@ def update_ticket_status(
 ):
     """
     Transitions ticket status according to ALLOWED_STATUS_TRANSITIONS graph.
+    Status transitions are restricted strictly to internal operations staff (Requesters get 403).
     Returns 409 Conflict if transition is not permitted.
     """
+    if current_user.role == "Requester":
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: Only internal operations staff can update ticket status"
+        )
+
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
-
-    if current_user.role == "Requester" and ticket.agency_id != current_user.agency_id:
-        raise HTTPException(status_code=403, detail="Forbidden: You cannot modify tickets of another agency")
 
     allowed = ALLOWED_STATUS_TRANSITIONS.get(ticket.status, [])
     if payload.status not in allowed:
@@ -513,8 +543,9 @@ def escalate_ticket(
     """
     Escalates an operations ticket:
     - Sets status to 'Escalated'
-    - Reassigns ticket to Escalation Manager USR-103 (Vikram Malhotra)
-    - Records reason and emits public outbox event.
+    - Reassigns ticket to configured Escalation Manager (DEFAULT_ESCALATION_MANAGER_ID)
+    - Records reason in audit log.
+    - Public outbox payload excludes internal free-text reason to prevent operational leakage.
     """
     if current_user.role == "Requester":
         raise HTTPException(status_code=403, detail="Forbidden: Requesters cannot escalate tickets directly")
@@ -534,10 +565,11 @@ def escalate_ticket(
     old_assignee = ticket.assigned_to
 
     ticket.status = "Escalated"
-    ticket.assigned_to = "USR-103"  # Vikram Malhotra (EscalationManager)
-    ticket.routing_reason = f"Escalated to Vikram Malhotra: {payload.reason}"
+    ticket.assigned_to = DEFAULT_ESCALATION_MANAGER_ID
+    ticket.routing_reason = f"Escalated to {DEFAULT_ESCALATION_MANAGER_ID}: {payload.reason}"
     ticket.updated_at = datetime.utcnow()
 
+    # Public event payload omits free-text reason to protect internal operational discussions
     emit_outbox_event(
         db=db,
         event_type="ticket.escalated",
@@ -546,8 +578,7 @@ def escalate_ticket(
         visibility="public",
         payload={
             "ticket_id": ticket.id,
-            "assigned_to": "USR-103",
-            "reason": payload.reason,
+            "assigned_to": DEFAULT_ESCALATION_MANAGER_ID,
             "old_status": old_status
         }
     )
@@ -556,7 +587,7 @@ def escalate_ticket(
         ticket_id=ticket.id,
         actor_id=current_user.id,
         action="ticket.escalated",
-        details={"reason": payload.reason, "assigned_to": "USR-103", "old_assignee": old_assignee}
+        details={"reason": payload.reason, "assigned_to": DEFAULT_ESCALATION_MANAGER_ID, "old_assignee": old_assignee}
     )
     db.commit()
 
@@ -564,7 +595,7 @@ def escalate_ticket(
         "status": "success",
         "ticket_id": ticket.id,
         "new_status": "Escalated",
-        "assigned_to": "USR-103",
+        "assigned_to": DEFAULT_ESCALATION_MANAGER_ID,
         "routing_reason": ticket.routing_reason
     }
 
@@ -586,6 +617,9 @@ def transfer_ticket(
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
+
+    if payload.target_agent_id == ticket.assigned_to:
+        raise HTTPException(status_code=400, detail=f"Ticket is already assigned to {ticket.assigned_to}")
 
     target_agent = db.query(User).filter(User.id == payload.target_agent_id).first()
     if not target_agent or target_agent.role not in ["Agent", "Lead", "EscalationManager"]:
@@ -626,6 +660,7 @@ def transfer_ticket(
         "status": "success",
         "ticket_id": ticket.id,
         "assigned_to": ticket.assigned_to,
+        "routing_reason": ticket.routing_reason,
         "side_conversations_preserved": side_convo_count,
         "total_recipients_preserved": recipients_count
     }

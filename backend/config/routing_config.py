@@ -8,6 +8,9 @@ REGION_MAPPING = {
 
 DEFAULT_FALLBACK_REGION = "APAC"
 
+# Escalation Manager Configuration (configurable assignment target)
+DEFAULT_ESCALATION_MANAGER_ID = "USR-103"  # Vikram Malhotra (EscalationManager)
+
 # Tier 2: Queue Priority Score Weights (Assumption)
 # Higher score = higher position in agent queue
 PRIORITY_SCORES = {
