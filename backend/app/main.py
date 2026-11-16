@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, Depends, HTTPException, Query, Header, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 from sqlalchemy import desc, func
 
 from backend.app.database import get_db
@@ -160,7 +160,7 @@ def list_tickets(
     # and sorting globally prior to offset/limit slicing provides exact queue prioritization without requiring database-specific
     # procedural extensions. For production scale (millions of records), queue_score is maintained via indexed column or Rust/Go scoring sidecar.
     if view in ["triage", "my_queue"]:
-        all_candidates = query.all()
+        all_candidates = query.options(defer(Ticket.description)).all()
         total_count = len(all_candidates)
 
         scored_tickets = []
@@ -210,7 +210,7 @@ def list_tickets(
 
     else:
         total_count = query.count()
-        tickets = query.offset(offset).limit(limit).all()
+        tickets = query.options(defer(Ticket.description)).offset(offset).limit(limit).all()
 
         results = []
         for t in tickets:

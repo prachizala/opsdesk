@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useUser } from "@/context/UserContext";
 import { fetchTickets, createTicket, suggestIntent } from "@/lib/api";
 import { TicketSummary } from "@/lib/types";
 import { SLABadge, PriorityBadge, StatusBadge } from "@/components/Badge";
+import { calculateClientSla } from "@/lib/sla";
 import {
   RefreshCw,
   PlusCircle,
@@ -40,9 +41,30 @@ export default function QueuePage() {
     setPage(0);
   }, [currentUser.id, isRequester]);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const [lastFetchedAt, setLastFetchedAt] = useState<number>(Date.now());
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const backoffDelayRef = useRef<number>(5000);
+  const timerIdRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Client-side 1s tick for updating countdowns
+  useEffect(() => {
+    const tickInterval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(tickInterval);
+  }, []);
+
+  const loadData = useCallback(async (isBackgroundPoll = false) => {
+    if (!isBackgroundPoll) {
+      setLoading(true);
+    }
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       const viewParam = isRequester ? (activeTab === "my_agency" ? "triage" : activeTab) : activeTab;
       const res = await fetchTickets(
@@ -50,22 +72,89 @@ export default function QueuePage() {
         pageSize,
         page * pageSize,
         currentUser.id,
-        intentFilter || undefined
+        intentFilter || undefined,
+        controller.signal
       );
       setTickets(res.tickets || []);
       setTotalCount(res.total || 0);
+      setError(null);
+      setLastFetchedAt(Date.now());
+      backoffDelayRef.current = 5000;
+      return true;
     } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        return false;
+      }
       setError(err instanceof Error ? err.message : "Failed to load operations queue");
+      return false;
     } finally {
-      setLoading(false);
+      if (!isBackgroundPoll) {
+        setLoading(false);
+      }
     }
-  }, [activeTab, page, currentUser.id, isRequester, intentFilter]);
+  }, [activeTab, page, currentUser.id, isRequester, intentFilter, pageSize]);
 
-  // Load on change and poll every 30s
+  // Load on change and resilient poll with jitter, visibilitychange pause, and exponential backoff
   useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 30000);
-    return () => clearInterval(interval);
+    let isCancelled = false;
+
+    const scheduleNextPoll = (isError = false) => {
+      if (timerIdRef.current) {
+        clearTimeout(timerIdRef.current);
+      }
+      if (typeof document !== "undefined" && document.hidden) {
+        return;
+      }
+
+      let delay: number;
+      if (isError) {
+        delay = backoffDelayRef.current;
+        backoffDelayRef.current = Math.min(backoffDelayRef.current * 2, 60000);
+      } else {
+        const jitter = (Math.random() * 6000) - 3000;
+        delay = Math.max(10000, 30000 + jitter);
+      }
+
+      timerIdRef.current = setTimeout(async () => {
+        if (isCancelled || (typeof document !== "undefined" && document.hidden)) return;
+        const success = await loadData(true);
+        if (!isCancelled) {
+          scheduleNextPoll(!success);
+        }
+      }, delay);
+    };
+
+    loadData(false).then((success) => {
+      if (!isCancelled) {
+        scheduleNextPoll(!success);
+      }
+    });
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.hidden) {
+        if (timerIdRef.current) clearTimeout(timerIdRef.current);
+        if (abortControllerRef.current) abortControllerRef.current.abort();
+      } else {
+        loadData(true).then((success) => {
+          if (!isCancelled) {
+            scheduleNextPoll(!success);
+          }
+        });
+      }
+    };
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
+
+    return () => {
+      isCancelled = true;
+      if (timerIdRef.current) clearTimeout(timerIdRef.current);
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      }
+    };
   }, [loadData]);
 
   // Create Ticket Form State
@@ -161,7 +250,7 @@ export default function QueuePage() {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={loadData}
+            onClick={() => { void loadData(); }}
             disabled={loading}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-md shadow-sm hover:bg-slate-50 disabled:opacity-50"
           >
@@ -287,7 +376,7 @@ export default function QueuePage() {
                       <StatusBadge status={ticket.status} />
                     </td>
                     <td className="px-4 py-3">
-                      <SLABadge sla={ticket.sla} />
+                      <SLABadge sla={calculateClientSla(ticket.sla, lastFetchedAt, currentTime)} />
                     </td>
                     {isStaff && (
                       <td className="px-4 py-3 text-xs text-slate-600">

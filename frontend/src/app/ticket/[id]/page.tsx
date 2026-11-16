@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useUser } from "@/context/UserContext";
@@ -18,6 +18,7 @@ import {
 } from "@/lib/api";
 import { TicketDetail } from "@/lib/types";
 import { SLABadge, PriorityBadge, StatusBadge } from "@/components/Badge";
+import { calculateClientSla } from "@/lib/sla";
 import {
   ArrowLeft,
   Clock,
@@ -72,26 +73,113 @@ export default function TicketDetailPage() {
   const [newRecipients, setNewRecipients] = useState("");
   const [newInitialMsg, setNewInitialMsg] = useState("");
 
-  const loadTicket = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const [lastFetchedAt, setLastFetchedAt] = useState<number>(Date.now());
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const backoffDelayRef = useRef<number>(5000);
+  const timerIdRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Client-side 1s tick for updating countdowns
+  useEffect(() => {
+    const tickInterval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(tickInterval);
+  }, []);
+
+  const loadTicket = useCallback(async (isBackgroundPoll = false) => {
+    if (!isBackgroundPoll) {
+      setLoading(true);
+    }
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
-      const data = await fetchTicketDetail(ticketId, currentUser.id);
+      const data = await fetchTicketDetail(ticketId, currentUser.id, controller.signal);
       setTicket(data);
       if (data.side_conversations && data.side_conversations.length > 0) {
-        setActiveSideThread(data.side_conversations[0].id);
+        setActiveSideThread((prev) => prev || data.side_conversations[0].id);
       }
+      setError(null);
+      setLastFetchedAt(Date.now());
+      backoffDelayRef.current = 5000;
+      return true;
     } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        return false;
+      }
       setError(err instanceof Error ? err.message : "Failed to load ticket details");
+      return false;
     } finally {
-      setLoading(false);
+      if (!isBackgroundPoll) {
+        setLoading(false);
+      }
     }
   }, [ticketId, currentUser.id]);
 
   useEffect(() => {
-    loadTicket();
-    const interval = setInterval(loadTicket, 30000);
-    return () => clearInterval(interval);
+    let isCancelled = false;
+
+    const scheduleNextPoll = (isError = false) => {
+      if (timerIdRef.current) {
+        clearTimeout(timerIdRef.current);
+      }
+      if (typeof document !== "undefined" && document.hidden) {
+        return;
+      }
+
+      let delay: number;
+      if (isError) {
+        delay = backoffDelayRef.current;
+        backoffDelayRef.current = Math.min(backoffDelayRef.current * 2, 60000);
+      } else {
+        const jitter = (Math.random() * 6000) - 3000;
+        delay = Math.max(10000, 30000 + jitter);
+      }
+
+      timerIdRef.current = setTimeout(async () => {
+        if (isCancelled || (typeof document !== "undefined" && document.hidden)) return;
+        const success = await loadTicket(true);
+        if (!isCancelled) {
+          scheduleNextPoll(!success);
+        }
+      }, delay);
+    };
+
+    loadTicket(false).then((success) => {
+      if (!isCancelled) {
+        scheduleNextPoll(!success);
+      }
+    });
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.hidden) {
+        if (timerIdRef.current) clearTimeout(timerIdRef.current);
+        if (abortControllerRef.current) abortControllerRef.current.abort();
+      } else {
+        loadTicket(true).then((success) => {
+          if (!isCancelled) {
+            scheduleNextPoll(!success);
+          }
+        });
+      }
+    };
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
+
+    return () => {
+      isCancelled = true;
+      if (timerIdRef.current) clearTimeout(timerIdRef.current);
+      if (abortControllerRef.current) abortControllerRef.current.abort();
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      }
+    };
   }, [loadTicket]);
 
   const handlePostMessage = async (e: React.FormEvent) => {
@@ -257,7 +345,7 @@ export default function TicketDetailPage() {
               </span>
               <PriorityBadge priority={ticket.priority} />
               <StatusBadge status={ticket.status} />
-              <SLABadge sla={ticket.sla} />
+              <SLABadge sla={calculateClientSla(ticket.sla, lastFetchedAt, currentTime)} />
             </div>
             <h1 className="text-xl font-bold text-slate-900 tracking-tight">{ticket.title}</h1>
             <p className="text-xs text-slate-600 mt-1">Agency: {ticket.agency_id}</p>
@@ -470,7 +558,7 @@ export default function TicketDetailPage() {
                     </button>
                   ) : (
                     <button
-                      onClick={() => assignTicket(ticket.id, currentUser.id, currentUser.id).then(loadTicket)}
+                      onClick={() => assignTicket(ticket.id, currentUser.id, currentUser.id).then(() => { void loadTicket(); })}
                       className="w-full inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded hover:bg-indigo-100 font-semibold"
                     >
                       <UserCheck className="w-3.5 h-3.5 text-indigo-600" /> Claim Ticket
