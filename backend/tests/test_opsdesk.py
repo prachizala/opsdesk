@@ -219,13 +219,14 @@ def test_contracts_golden_vectors():
         exp = case["expected_output"]
         now = datetime.fromisoformat(inp["now"].replace("Z", ""))
         cid = datetime.fromisoformat(inp["check_in_date"].replace("Z", ""))
-        lcd = datetime.fromisoformat(inp["lcd_date"].replace("Z", ""))
+        lcd = datetime.fromisoformat(inp["lcd_date"].replace("Z", "")) if inp.get("lcd_date") else None
         
         act = evaluate_travel_sla(
             status=inp["status"],
             check_in_date=cid,
             lcd_date=lcd,
             priority=inp["priority"],
+            intent=inp.get("intent"),
             now=now
         )
         assert act["status"] == exp["status"], f"Case {case['case_id']} status mismatch: {act['status']} != {exp['status']}"
@@ -342,13 +343,13 @@ def test_seed_tboh_fixtures(db_session: Session):
     assert t1001.status == "Closed"
     assert t1002.status == "Closed"
 
-    # TCK-1004: Urgent, MEA, ~2.5h in future. lcd_date >= check_in_date so check-in is urgent factor.
+    # TCK-1004: Urgent, MEA, ~2.5h in future. lcd_date is None for check-in assist.
     t1004 = db_session.query(Ticket).filter(Ticket.id == "TCK-1004").first()
     assert t1004 is not None
     assert t1004.priority == "Urgent"
     assert t1004.status == "Open"
     assert t1004.check_in_date > datetime.utcnow()
-    assert t1004.lcd_date >= t1004.check_in_date
+    assert t1004.lcd_date is None
     assert "active cases" in t1004.routing_reason
 
     # TCK-1005: Side thread with recipient
@@ -359,13 +360,13 @@ def test_seed_tboh_fixtures(db_session: Session):
     assert len(sc.recipients) > 0
     assert sc.recipients[0].email == "reservations@vendor.example.com"
 
-    # TCK-1006: Urgent, ~45m in future. lcd_date >= check_in_date so check-in is urgent factor.
+    # TCK-1006: Urgent, ~45m in future. lcd_date is None for voucher resend.
     t1006 = db_session.query(Ticket).filter(Ticket.id == "TCK-1006").first()
     assert t1006 is not None
     assert t1006.priority == "Urgent"
     assert t1006.status == "Open"
     assert t1006.check_in_date > datetime.utcnow()
-    assert t1006.lcd_date >= t1006.check_in_date
+    assert t1006.lcd_date is None
     assert "active cases" in t1006.routing_reason
 
     # TCK-1007: Journey B Unassigned Urgent triage fixture (~2.25h in future, AGY-001)
@@ -373,6 +374,7 @@ def test_seed_tboh_fixtures(db_session: Session):
     assert t1007 is not None
     assert t1007.priority == "Urgent"
     assert t1007.status == "New"
+    assert t1007.lcd_date is None
     assert t1007.assigned_to is None
     assert t1007.check_in_date > datetime.utcnow()
 
@@ -1051,4 +1053,91 @@ def test_schema_validation_failures(client: TestClient):
     # 8. Invalid status Literal
     res8 = client.post("/api/tickets/TCK-1005/status", json={"status": "ArchivedStatus"}, headers={"X-User-Id": "USR-101"})
     assert res8.status_code == 422
+
+
+# ============================================================================
+# 16. INTENT-AWARE SLA & LCD TESTS
+# ============================================================================
+
+def test_seed_zero_open_refund_cancellation_tickets_with_past_lcd(db_session: Session):
+    """
+    Verifies that for active (non-Closed, non-Resolved) tickets with Refund Request or
+    Cancellation Inconvenience intents, lcd_date is in the future (> now) and <= check_in_date.
+    There should be zero open Refund/Cancellation tickets seeded with a past LCD.
+    """
+    now = datetime.utcnow()
+    cancellation_intents = ["Refund Request", "Cancellation Inconvenience"]
+    open_tickets = db_session.query(Ticket).filter(
+        Ticket.status.notin_(["Closed", "Resolved"]),
+        Ticket.intent.in_(cancellation_intents)
+    ).all()
+
+    assert len(open_tickets) > 0, "Expected seeded open refund/cancellation tickets"
+    past_lcd_tickets = [t for t in open_tickets if t.lcd_date is not None and t.lcd_date <= now]
+    assert len(past_lcd_tickets) == 0, f"Found {len(past_lcd_tickets)} open tickets with past LCD"
+
+
+def test_sla_intent_cancellation_uses_lcd():
+    """
+    Cancellation Inconvenience intent must factor in lcd_date if present.
+    If check_in_date is 48h away and lcd_date is 3h away, effective urgency is 3h (AT_RISK for Urgent).
+    """
+    now = datetime(2026, 11, 16, 12, 0)
+    res = evaluate_travel_sla(
+        status="Open",
+        check_in_date=datetime(2026, 11, 18, 12, 0),  # 48h
+        lcd_date=datetime(2026, 11, 16, 15, 0),       # 3h
+        priority="Urgent",
+        intent="Cancellation Inconvenience",
+        now=now
+    )
+    assert res["status"] == "AT_RISK"
+    assert res["hours_remaining"] == 3.0
+
+
+def test_sla_intent_checkin_ignores_lcd():
+    """
+    Emergency Check-in Assist intent must ignore lcd_date even if lcd_date is past.
+    It strictly uses check_in_date for urgency.
+    """
+    now = datetime(2026, 11, 16, 12, 0)
+    res = evaluate_travel_sla(
+        status="Open",
+        check_in_date=datetime(2026, 11, 17, 12, 0),  # 24h
+        lcd_date=datetime(2026, 11, 15, 12, 0),       # past (-24h)
+        priority="Urgent",
+        intent="Emergency Check-in Assist",
+        now=now
+    )
+    assert res["status"] == "NORMAL"
+    assert res["hours_remaining"] == 24.0
+
+
+def test_sla_unclassified_uses_lcd():
+    """
+    Unclassified (or None) intent defaults safely to min(check_in, lcd).
+    """
+    now = datetime(2026, 11, 16, 12, 0)
+    res_unclassified = evaluate_travel_sla(
+        status="Open",
+        check_in_date=datetime(2026, 11, 18, 12, 0),  # 48h
+        lcd_date=datetime(2026, 11, 16, 14, 0),       # 2h
+        priority="Urgent",
+        intent="Unclassified",
+        now=now
+    )
+    assert res_unclassified["status"] == "AT_RISK"
+    assert res_unclassified["hours_remaining"] == 2.0
+
+    res_none = evaluate_travel_sla(
+        status="Open",
+        check_in_date=datetime(2026, 11, 18, 12, 0),
+        lcd_date=datetime(2026, 11, 16, 14, 0),
+        priority="Urgent",
+        intent=None,
+        now=now
+    )
+    assert res_none["status"] == "AT_RISK"
+    assert res_none["hours_remaining"] == 2.0
+
 

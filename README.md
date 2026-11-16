@@ -9,7 +9,12 @@ OpsDesk replaces fragmented ticketing in travel operations with context-linked c
 - **Transfer-Proof Supplier Threads:** Decouples supplier conversation recipients from assigned agents, preserving threads across transfers.
 - **Uncapped Ops Data Path:** Eliminates artificial 3,000-row export barriers via direct database streaming.
 
-> **Note on Demo Fixtures:** In demo fixtures TCK-1004, TCK-1006, and TCK-1007, the Last Cancellation Date (LCD) is intentionally placed equal to or after the check-in date so that guest check-in proximity directly acts as the controlling urgency factor.
+> **Intent-Aware SLA Rule & LCD Handling:**
+> - `lcd_date` is optional/nullable across Pydantic schemas and database models (`Optional[datetime] = None`).
+> - Urgency deadline is determined by operational intent:
+>   - For cancellation-sensitive intents (`Refund Request`, `Cancellation Inconvenience`, `Unclassified`, or unspecified `None`), if `lcd_date` is present, effective deadline is `min(check_in_date, lcd_date)`.
+>   - For other operational intents (e.g., `Emergency Check-in Assist`, `Voucher Resend`, `Date Amendment`, `Bedding / Room Preference`), cancellation deadlines are inapplicable and `check_in_date` strictly governs urgency.
+> - In demo fixtures TCK-1004, TCK-1006, and TCK-1007 (check-in assist / voucher resend), `lcd_date` is `None`. Active Refund and Cancellation demo tickets are seeded with future LCDs (`now < lcd <= check_in`).
 
 ---
 
