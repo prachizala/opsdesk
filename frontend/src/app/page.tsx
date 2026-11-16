@@ -1,27 +1,52 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useUser } from "@/context/UserContext";
-import { fetchTickets, createTicket, suggestIntent } from "@/lib/api";
+import { useToast } from "@/context/ToastContext";
+import { fetchTickets, createTicket, suggestIntent, getExportUrl } from "@/lib/api";
 import { TicketSummary } from "@/lib/types";
-import { SLABadge, PriorityBadge, StatusBadge } from "@/components/Badge";
 import {
-  RefreshCw,
-  PlusCircle,
-  Sparkles,
-  AlertCircle,
-  Inbox,
-  ArrowRight,
+  Button,
+  Input,
+  Select,
+  Textarea,
+  Tabs,
+  Chip,
+  PriorityChip,
+  StatusChip,
+  SlaBadge,
+  Avatar,
+  Modal,
+  TableRowSkeleton,
+  EmptyState,
+  ErrorState,
+} from "@/components/ui";
+import {
+  Plus,
+  Download,
+  Search,
+  Filter,
+  X,
+  Calendar,
+  Clock,
   ChevronLeft,
   ChevronRight,
-  Filter,
-  Search,
-  X,
+  RotateCcw,
+  Sparkles,
+  Layers,
+  Inbox,
+  UserCheck,
+  Building2,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default function QueuePage() {
-  const { currentUser, isStaff, isRequester } = useUser();
+  const { currentUser, isStaff, isLead, isRequester } = useUser();
+  const { showToast } = useToast();
+  const router = useRouter();
+
+  // Navigation and Query state
   const [activeTab, setActiveTab] = useState<string>("triage");
   const [tickets, setTickets] = useState<TicketSummary[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
@@ -29,13 +54,44 @@ export default function QueuePage() {
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState<number>(0);
   const pageSize = 15;
-  const [intentFilter, setIntentFilter] = useState<string>("");
+
+  // Filters state
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [debouncedSearch, setDebouncedSearch] = useState<string>("");
+  const [intentFilter, setIntentFilter] = useState<string>("");
   const [priorityFilter, setPriorityFilter] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("");
-  const [isCreateOpen, setIsCreateOpen] = useState<boolean>(false);
+  const [atRiskOnly, setAtRiskOnly] = useState<boolean>(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState<boolean>(false);
 
-  // Default tab for requester vs staff
+  // Export State
+  const [isExporting, setIsExporting] = useState<boolean>(false);
+
+  // Create Ticket Modal State
+  const [isCreateOpen, setIsCreateOpen] = useState<boolean>(false);
+  const [createTitle, setCreateTitle] = useState("");
+  const [createDesc, setCreateDesc] = useState("");
+  const [createTboh, setCreateTboh] = useState("");
+  const [createPrio, setCreatePrio] = useState<"Low" | "Medium" | "High" | "Urgent">("Medium");
+  const [createCheckin, setCreateCheckin] = useState("");
+  const [createLcd, setCreateLcd] = useState("");
+  const [createIntent, setCreateIntent] = useState("");
+  const [suggestedIntentChip, setSuggestedIntentChip] = useState<string | null>(null);
+  const [createAgency, setCreateAgency] = useState("AGY-001");
+  const [suggestingIntent, setSuggestingIntent] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setPage(0);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Set default tab on role switch
   useEffect(() => {
     if (isRequester) {
       setActiveTab("my_agency");
@@ -45,91 +101,164 @@ export default function QueuePage() {
     setPage(0);
   }, [currentUser.id, isRequester]);
 
+  // Load Queue Data
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const viewParam = isRequester ? (activeTab === "my_agency" ? "triage" : activeTab) : activeTab;
+      const viewParam = isRequester
+        ? activeTab === "my_agency"
+          ? "triage"
+          : activeTab
+        : activeTab;
+
       const res = await fetchTickets(
         viewParam,
         pageSize,
         page * pageSize,
         currentUser.id,
         intentFilter || undefined,
-        searchQuery || undefined,
+        debouncedSearch || undefined,
         priorityFilter || undefined,
         statusFilter || undefined
       );
-      setTickets(res.tickets || []);
+
+      let fetchedTickets = res.tickets || [];
+
+      // Client-side At Risk / Breached toggle
+      if (atRiskOnly) {
+        fetchedTickets = fetchedTickets.filter(
+          (t) => t.sla.status === "AT_RISK" || t.sla.status === "BREACHED"
+        );
+      }
+
+      setTickets(fetchedTickets);
       setTotalCount(res.total || 0);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load operations queue");
     } finally {
       setLoading(false);
     }
-  }, [activeTab, page, currentUser.id, isRequester, intentFilter, searchQuery, priorityFilter, statusFilter]);
+  }, [
+    activeTab,
+    page,
+    currentUser.id,
+    isRequester,
+    intentFilter,
+    debouncedSearch,
+    priorityFilter,
+    statusFilter,
+    atRiskOnly,
+  ]);
 
-  // Load on change and poll every 30s
   useEffect(() => {
     loadData();
     const interval = setInterval(loadData, 30000);
     return () => clearInterval(interval);
   }, [loadData]);
 
-  // Create Ticket Form State
-  const [createTitle, setCreateTitle] = useState("");
-  const [createDesc, setCreateDesc] = useState("");
-  const [createTboh, setCreateTboh] = useState("");
-  const [createPrio, setCreatePrio] = useState("Medium");
-  const [createCheckin, setCreateCheckin] = useState("");
-  const [createLcd, setCreateLcd] = useState("");
-  const [createIntent, setCreateIntent] = useState("");
-  const [createAgency, setCreateAgency] = useState("AGY-001");
-  const [suggestingIntent, setSuggestingIntent] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
+  // Tab definitions matching role
+  const staffTabs = [
+    { id: "triage", label: "Triage Active", icon: <Inbox className="w-3.5 h-3.5" /> },
+    { id: "my_queue", label: "Assigned to Me", icon: <UserCheck className="w-3.5 h-3.5" /> },
+    { id: "by_region", label: "By Region", icon: <Building2 className="w-3.5 h-3.5" /> },
+    { id: "by_intent", label: "By Intent", icon: <Layers className="w-3.5 h-3.5" /> },
+    { id: "linked", label: "Linked Cases", icon: <RotateCcw className="w-3.5 h-3.5" /> },
+  ];
 
+  const requesterTabs = [
+    { id: "my_agency", label: "Our Agency Tickets", icon: <Inbox className="w-3.5 h-3.5" /> },
+    { id: "by_intent", label: "By Category", icon: <Layers className="w-3.5 h-3.5" /> },
+    { id: "linked", label: "Linked Trips", icon: <RotateCcw className="w-3.5 h-3.5" /> },
+  ];
+
+  const currentTabs = isRequester ? requesterTabs : staffTabs;
+
+  // Handle Export CSV
+  const handleExportCsv = async () => {
+    if (!isLead) {
+      showToast(
+        "CSV export is restricted to Operations Team Lead (RBAC rule). Current role: " +
+          currentUser.role,
+        "warning"
+      );
+      return;
+    }
+    setIsExporting(true);
+    showToast("Preparing download: streaming operations database...", "info");
+    try {
+      const res = await fetch(getExportUrl(), {
+        headers: { "X-User-Id": currentUser.id },
+      });
+      if (!res.ok) {
+        throw new Error(`Export failed with HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `opsdesk_tickets_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      showToast("Operations queue export downloaded successfully.", "success");
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : "Export failed. Please try again.", "error");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Auto-Suggest Intent
   const handleSuggest = async () => {
-    if (!createTitle && !createDesc) return;
+    if (!createTitle.trim() && !createDesc.trim()) return;
     setSuggestingIntent(true);
     try {
       const res = await suggestIntent(createTitle, createDesc, currentUser.id);
       if (res && res.intent) {
-        setCreateIntent(res.intent);
+        setSuggestedIntentChip(res.intent);
       }
-    } catch (err: unknown) {
-      console.error(err);
+    } catch {
+      // Graceful fallback
     } finally {
       setSuggestingIntent(false);
     }
   };
 
+  // Submit Create Ticket
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreating(true);
     setCreateError(null);
     try {
-      await createTicket(
+      const newTicket = await createTicket(
         {
-          title: createTitle,
-          description: createDesc,
-          tboh_id: createTboh,
+          title: createTitle.trim(),
+          description: createDesc.trim(),
+          tboh_id: createTboh.trim(),
           priority: createPrio,
           check_in_date: new Date(createCheckin).toISOString(),
           lcd_date: createLcd ? new Date(createLcd).toISOString() : null,
-          intent: createIntent || null,
+          intent: createIntent || undefined,
           agency_id: isStaff ? createAgency : undefined,
         },
         currentUser.id
       );
+
       setIsCreateOpen(false);
+      // Reset form
       setCreateTitle("");
       setCreateDesc("");
       setCreateTboh("");
       setCreateCheckin("");
       setCreateLcd("");
       setCreateIntent("");
+      setSuggestedIntentChip(null);
+
+      showToast(`Ticket ${newTicket.id} created successfully!`, "success");
       loadData();
+      router.push(`/ticket/${newTicket.id}`);
     } catch (err: unknown) {
       setCreateError(err instanceof Error ? err.message : "Failed to create ticket");
     } finally {
@@ -137,459 +266,778 @@ export default function QueuePage() {
     }
   };
 
-  const staffTabs = [
-    { id: "triage", label: "Triage (Unassigned)" },
-    { id: "my_queue", label: "My Queue" },
-    { id: "by_region", label: `By Region (${currentUser.region || "All"})` },
-    { id: "by_intent", label: "By Intent" },
-    { id: "linked", label: "Linked Cases" },
-  ];
+  // Clear all filters
+  const hasActiveFilters =
+    Boolean(searchQuery) ||
+    Boolean(intentFilter) ||
+    Boolean(priorityFilter) ||
+    Boolean(statusFilter) ||
+    atRiskOnly;
 
-  const requesterTabs = [
-    { id: "my_agency", label: "All Agency Tickets" },
-    { id: "by_intent", label: "By Intent" },
-    { id: "linked", label: "Linked Cases" },
-  ];
+  const clearFilters = () => {
+    setSearchQuery("");
+    setDebouncedSearch("");
+    setIntentFilter("");
+    setPriorityFilter("");
+    setStatusFilter("");
+    setAtRiskOnly(false);
+    setPage(0);
+  };
 
-  const availableTabs = isRequester ? requesterTabs : staffTabs;
+  // Form validity check
+  const isFormValid =
+    createTitle.trim().length >= 3 &&
+    createDesc.trim().length >= 5 &&
+    createTboh.trim().length >= 3 &&
+    Boolean(createCheckin);
+
+  // Pagination bounds
+  const totalPages = Math.ceil(totalCount / pageSize);
+  const startItem = totalCount > 0 ? page * pageSize + 1 : 0;
+  const endItem = Math.min((page + 1) * pageSize, totalCount);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+    <div className="flex flex-col gap-6">
+      {/* 1. Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            {isRequester ? `${currentUser.name} Operations Portal` : "Operations Queue & Triage"}
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            {isRequester
-              ? "View and create support cases for your agency bookings."
-              : "Live B2B travel operations desk with intent-aware SLAs and 2-tier workload routing."}
+          <div className="flex items-center gap-3">
+            <h1 className="text-page font-semibold text-content-primary tracking-tight">
+              Operations Queue
+            </h1>
+            <span className="font-mono-numbers text-caption px-2 py-0.5 rounded-full bg-surface border border-border text-content-secondary font-medium">
+              {totalCount.toLocaleString()} cases
+            </span>
+          </div>
+          <p className="text-caption text-content-secondary mt-1">
+            Real-time travel dispatching with LCD-aware SLA countdowns and tenant isolation.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={loadData}
-            disabled={loading}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-md shadow-sm hover:bg-slate-50 disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-indigo-600" : ""}`} />
-            Refresh
-          </button>
-          <button
+
+        <div className="flex items-center gap-2.5 shrink-0">
+          {isStaff && (
+            <Button
+              variant="secondary"
+              size="md"
+              loading={isExporting}
+              icon={<Download className="w-4 h-4 text-content-secondary" />}
+              onClick={handleExportCsv}
+            >
+              Export CSV
+            </Button>
+          )}
+          <Button
+            variant="primary"
+            size="md"
+            icon={<Plus className="w-4 h-4" />}
             onClick={() => setIsCreateOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 rounded-md shadow-sm hover:bg-indigo-700 transition-colors"
           >
-            <PlusCircle className="w-4 h-4" />
-            New Ticket
-          </button>
+            New ticket
+          </Button>
         </div>
       </div>
 
-      {/* Tabs Bar */}
-      <div className="border-b border-slate-200 flex flex-wrap items-center justify-between gap-4 mb-6">
-        <nav className="flex space-x-4 overflow-x-auto" aria-label="Tabs">
-          {availableTabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => {
-                setActiveTab(tab.id);
-                setPage(0);
-              }}
-              className={`py-3 px-2 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
-                activeTab === tab.id
-                  ? "border-indigo-600 text-indigo-600"
-                  : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
+      {/* 2. View Tabs */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <Tabs
+          tabs={currentTabs}
+          activeTab={activeTab}
+          onChange={(tab) => {
+            setActiveTab(tab);
+            setPage(0);
+          }}
+          ariaLabel="Queue view modes"
+        />
 
-        {/* Optional Intent Filter */}
-        {activeTab === "by_intent" && (
-          <div className="flex items-center gap-2 pb-2">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <select
+        {/* Mobile Filter Sheet Toggle Button */}
+        <div className="sm:hidden flex items-center justify-between">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Filter className="w-3.5 h-3.5" />}
+            onClick={() => setMobileFiltersOpen(!mobileFiltersOpen)}
+          >
+            Filters {hasActiveFilters && "(Active)"}
+          </Button>
+        </div>
+      </div>
+
+      {/* 3. Filter Bar */}
+      <div
+        className={cn(
+          "bg-surface border border-border rounded-card p-3 shadow-xs flex flex-col gap-3",
+          mobileFiltersOpen ? "block" : "hidden sm:flex"
+        )}
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-center">
+          {/* Search Box */}
+          <div className="lg:col-span-4">
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search TBOH, TCK-ID, keyword..."
+              leftIcon={<Search className="w-4 h-4 text-content-tertiary" />}
+              rightIcon={
+                searchQuery ? (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="cursor-pointer text-content-tertiary hover:text-content-primary"
+                    aria-label="Clear search query"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                ) : undefined
+              }
+            />
+          </div>
+
+          {/* Intent Category Select */}
+          <div className="lg:col-span-3">
+            <Select
               value={intentFilter}
               onChange={(e) => {
                 setIntentFilter(e.target.value);
                 setPage(0);
               }}
-              aria-label="Filter by intent"
-              className="text-xs bg-white border border-slate-300 text-slate-700 rounded-md px-2 py-1 focus:ring-1 focus:ring-indigo-500"
-            >
-              <option value="">All Intents</option>
-              <option value="Refund Request">Refund Request</option>
-              <option value="Cancellation Inconvenience">Cancellation Inconvenience</option>
-              <option value="Emergency Check-in Assist">Emergency Check-in Assist</option>
-              <option value="Date Amendment">Date Amendment</option>
-              <option value="Bedding / Room Preference">Bedding / Room Preference</option>
-              <option value="Voucher Resend">Voucher Resend</option>
-              <option value="Unclassified">Unclassified</option>
-            </select>
+              options={[
+                { value: "", label: "All Intent Categories" },
+                { value: "Refund Request", label: "Refund Request" },
+                { value: "Cancellation Inconvenience", label: "Cancellation Inconvenience" },
+                { value: "Date Amendment", label: "Date Amendment" },
+                { value: "Bedding / Room Preference", label: "Bedding / Room Preference" },
+                { value: "Voucher Resend", label: "Voucher Resend" },
+                { value: "Emergency Check-in Assist", label: "Emergency Check-in Assist" },
+                { value: "Unclassified", label: "Unclassified" },
+              ]}
+            />
           </div>
-        )}
-      </div>
 
-      {/* Search & Multi-Attribute Filters Bar */}
-      <div className="bg-white border border-slate-200 rounded-lg p-3.5 mb-4 shadow-sm flex flex-col sm:flex-row items-center gap-3">
-        <div className="relative flex-1 w-full">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setPage(0);
-            }}
-            placeholder="Search by TBOH ID (e.g. TBOH-1001), Ticket ID, or keywords..."
-            className="w-full pl-9 pr-8 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-md focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800 placeholder-slate-400"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => {
-                setSearchQuery("");
-                setPage(0);
-              }}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              title="Clear search"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
-          <div className="flex items-center gap-1.5 text-xs text-slate-500 whitespace-nowrap">
-            <span className="font-medium text-slate-600">Priority:</span>
-            <select
+          {/* Priority Select */}
+          <div className="lg:col-span-2">
+            <Select
               value={priorityFilter}
               onChange={(e) => {
                 setPriorityFilter(e.target.value);
                 setPage(0);
               }}
-              aria-label="Filter by priority"
-              className="text-xs bg-white border border-slate-300 text-slate-700 rounded-md px-2 py-1 focus:ring-1 focus:ring-indigo-500"
-            >
-              <option value="">All Priorities</option>
-              <option value="Urgent">Urgent</option>
-              <option value="High">High</option>
-              <option value="Medium">Medium</option>
-              <option value="Low">Low</option>
-            </select>
+              options={[
+                { value: "", label: "All Priorities" },
+                { value: "Urgent", label: "Urgent" },
+                { value: "High", label: "High" },
+                { value: "Medium", label: "Medium" },
+                { value: "Low", label: "Low" },
+              ]}
+            />
           </div>
 
-          <div className="flex items-center gap-1.5 text-xs text-slate-500 whitespace-nowrap">
-            <span className="font-medium text-slate-600">Status:</span>
-            <select
+          {/* Status Select */}
+          <div className="lg:col-span-2">
+            <Select
               value={statusFilter}
               onChange={(e) => {
                 setStatusFilter(e.target.value);
                 setPage(0);
               }}
-              aria-label="Filter by status"
-              className="text-xs bg-white border border-slate-300 text-slate-700 rounded-md px-2 py-1 focus:ring-1 focus:ring-indigo-500"
-            >
-              <option value="">All Statuses</option>
-              <option value="New">New</option>
-              <option value="Open">Open</option>
-              <option value="Pending">Pending</option>
-              <option value="Escalated">Escalated</option>
-              <option value="Resolved">Resolved</option>
-              <option value="Closed">Closed</option>
-            </select>
+              options={[
+                { value: "", label: "All Statuses" },
+                { value: "New", label: "New" },
+                { value: "Open", label: "Open" },
+                { value: "Pending", label: "Pending" },
+                { value: "Escalated", label: "Escalated" },
+                { value: "Resolved", label: "Resolved" },
+                { value: "Closed", label: "Closed" },
+              ]}
+            />
           </div>
 
-          {(searchQuery || priorityFilter || statusFilter) && (
+          {/* At Risk Only Toggle */}
+          <div className="lg:col-span-1 flex items-center justify-end">
             <button
+              type="button"
               onClick={() => {
-                setSearchQuery("");
-                setPriorityFilter("");
-                setStatusFilter("");
+                setAtRiskOnly(!atRiskOnly);
                 setPage(0);
               }}
-              className="text-xs font-medium text-indigo-600 hover:text-indigo-800 whitespace-nowrap px-2 py-1 rounded bg-indigo-50 hover:bg-indigo-100 transition-colors"
+              className={cn(
+                "h-9 px-2.5 rounded-input text-caption font-medium border flex items-center gap-1.5 transition-subtle cursor-pointer select-none whitespace-nowrap",
+                atRiskOnly
+                  ? "bg-amber-100 text-amber-900 border-amber-300 font-semibold"
+                  : "bg-surface text-content-secondary border-border hover:border-border-strong"
+              )}
+              title="Filter by At-Risk or Breached SLAs only"
             >
-              Reset Filters
+              <Clock className="w-3.5 h-3.5 text-amber-600" />
+              <span>At risk</span>
             </button>
-          )}
+          </div>
         </div>
+
+        {/* Removable Active Filter Chips & Clear Filters Link */}
+        {hasActiveFilters && (
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border text-caption">
+            <span className="text-content-tertiary font-medium">Active filters:</span>
+            {debouncedSearch && (
+              <Chip size="sm" variant="brand">
+                Search: &quot;{debouncedSearch}&quot;
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="ml-1 text-content-tertiary hover:text-content-primary cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </Chip>
+            )}
+            {intentFilter && (
+              <Chip size="sm" variant="default">
+                Intent: {intentFilter}
+                <button
+                  type="button"
+                  onClick={() => setIntentFilter("")}
+                  className="ml-1 text-content-tertiary hover:text-content-primary cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </Chip>
+            )}
+            {priorityFilter && (
+              <Chip size="sm" variant="default">
+                Priority: {priorityFilter}
+                <button
+                  type="button"
+                  onClick={() => setPriorityFilter("")}
+                  className="ml-1 text-content-tertiary hover:text-content-primary cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </Chip>
+            )}
+            {statusFilter && (
+              <Chip size="sm" variant="default">
+                Status: {statusFilter}
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("")}
+                  className="ml-1 text-content-tertiary hover:text-content-primary cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </Chip>
+            )}
+            {atRiskOnly && (
+              <Chip size="sm" variant="default" className="bg-amber-50 text-amber-900 border-amber-200">
+                At risk only
+                <button
+                  type="button"
+                  onClick={() => setAtRiskOnly(false)}
+                  className="ml-1 text-content-tertiary hover:text-content-primary cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </Chip>
+            )}
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="text-brand-600 hover:text-brand-700 font-medium ml-auto cursor-pointer underline text-caption"
+            >
+              Clear filters
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Table Content */}
-      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+      {/* 4. Desktop Table & Mobile Stacked Cards */}
+      <div className="bg-surface border border-border rounded-card shadow-xs overflow-hidden">
         {error ? (
-          <div className="p-8 text-center">
-            <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
-            <p className="text-sm font-semibold text-slate-800">Error Loading Tickets</p>
-            <p className="text-xs text-red-600 mt-1">{error}</p>
+          <div className="p-6">
+            <ErrorState title="Failed to load tickets" message={error} onRetry={loadData} />
           </div>
         ) : loading && tickets.length === 0 ? (
-          <div className="p-12 text-center text-slate-400">
-            <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-indigo-500" />
-            <p className="text-sm">Loading operations queue...</p>
-          </div>
-        ) : tickets.length === 0 ? (
-          <div className="p-12 text-center text-slate-400">
-            <Inbox className="w-10 h-10 mx-auto mb-2 stroke-1 text-slate-300" />
-            <p className="text-sm font-medium text-slate-600">No tickets found</p>
-            <p className="text-xs text-slate-400 mt-1">There are no records in this view matching current filters.</p>
-          </div>
-        ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
-              <thead className="bg-slate-50 text-slate-700 font-semibold text-xs uppercase tracking-wider">
-                <tr>
-                  <th className="px-4 py-3">ID & Title</th>
-                  <th className="px-4 py-3">TBOH Ref</th>
-                  <th className="px-4 py-3">Intent</th>
-                  <th className="px-4 py-3">Priority</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">SLA Urgency</th>
-                  {isStaff && <th className="px-4 py-3">Assignee</th>}
-                  {isStaff && <th className="px-4 py-3 text-right">Queue Score</th>}
-                  <th className="px-4 py-3 text-right">Action</th>
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-border bg-surface-subtle text-micro-label uppercase text-content-tertiary">
+                  <th className="py-3 px-3">#</th>
+                  <th className="py-3 px-4">SLA Countdown</th>
+                  <th className="py-3 px-4">Case Reference</th>
+                  <th className="py-3 px-4">Agency</th>
+                  <th className="py-3 px-3">Intent</th>
+                  <th className="py-3 px-3">Priority</th>
+                  <th className="py-3 px-3">Status</th>
+                  <th className="py-3 px-4">Deadlines (Check-in / LCD)</th>
+                  <th className="py-3 px-4">Assignee</th>
+                  {isStaff && <th className="py-3 px-3 text-right">Score</th>}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {tickets.map((ticket) => (
-                  <tr key={ticket.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 font-medium">
-                      <Link
-                        href={`/ticket/${ticket.id}`}
-                        className="text-indigo-600 hover:text-indigo-800 font-semibold hover:underline block"
-                      >
-                        {ticket.id}
-                      </Link>
-                      <span className="text-xs text-slate-700 block truncate max-w-xs">{ticket.title}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="font-mono text-xs text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                        {ticket.tboh_id}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-slate-700">
-                      {ticket.intent || <span className="text-slate-400 italic">Unclassified</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <PriorityBadge priority={ticket.priority} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={ticket.status} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <SLABadge sla={ticket.sla} />
-                    </td>
-                    {isStaff && (
-                      <td className="px-4 py-3 text-xs text-slate-600">
-                        {ticket.assigned_to ? (
-                          <span className="font-medium text-slate-800">{ticket.assigned_to}</span>
-                        ) : (
-                          <span className="text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded text-[11px] font-semibold">
-                            Unassigned
-                          </span>
-                        )}
-                      </td>
-                    )}
-                    {isStaff && (
-                      <td className="px-4 py-3 text-xs font-mono font-semibold text-right text-slate-700">
-                        {ticket.queue_score !== null ? ticket.queue_score.toFixed(1) : "—"}
-                      </td>
-                    )}
-                    <td className="px-4 py-3 text-right">
-                      <Link
-                        href={`/ticket/${ticket.id}`}
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-900"
-                      >
-                        <span>View</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </Link>
-                    </td>
-                  </tr>
+              <tbody>
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <TableRowSkeleton key={i} columns={isStaff ? 10 : 9} />
                 ))}
               </tbody>
             </table>
           </div>
-        )}
+        ) : tickets.length === 0 ? (
+          <EmptyState
+            title="No cases found in this view"
+            description={
+              hasActiveFilters
+                ? "Try adjusting your search keywords or resetting active filters."
+                : "Your operations dispatch queue is clear. Good job!"
+            }
+            actionLabel={hasActiveFilters ? "Clear active filters" : "Create new ticket"}
+            onAction={hasActiveFilters ? clearFilters : () => setIsCreateOpen(true)}
+            className="my-6"
+          />
+        ) : (
+          <>
+            {/* Desktop Table View (>= 768px) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-border bg-surface-subtle text-micro-label uppercase text-content-tertiary sticky top-0 z-10">
+                    <th className="py-3 px-3 w-10 text-center">#</th>
+                    <th className="py-3 px-4 min-w-[160px]">SLA Countdown</th>
+                    <th className="py-3 px-4 min-w-[240px]">Case Details</th>
+                    <th className="py-3 px-4 min-w-[150px]">Agency</th>
+                    <th className="py-3 px-3">Intent</th>
+                    <th className="py-3 px-3">Priority</th>
+                    <th className="py-3 px-3">Status</th>
+                    <th className="py-3 px-4 min-w-[160px]">Deadlines</th>
+                    <th className="py-3 px-4 min-w-[150px]">Assignee</th>
+                    {isStaff && <th className="py-3 px-3 text-right w-16">Score</th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {tickets.map((t, idx) => {
+                    const rank = page * pageSize + idx + 1;
+                    const isRankOneEmergency =
+                      rank === 1 &&
+                      t.priority === "Urgent" &&
+                      (t.sla.status === "AT_RISK" || t.sla.status === "BREACHED");
 
-        {/* Pagination Footer */}
-        <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
-          <div>
-            Showing <span className="font-semibold">{tickets.length > 0 ? page * pageSize + 1 : 0}</span> to{" "}
-            <span className="font-semibold">{Math.min((page + 1) * pageSize, totalCount)}</span> of{" "}
-            <span className="font-semibold">{totalCount}</span> cases
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={page === 0 || loading}
-              className="inline-flex items-center px-2 py-1 border border-slate-300 rounded bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40"
-            >
-              <ChevronLeft className="w-3.5 h-3.5" />
-              Prev
-            </button>
-            <span className="px-2 font-medium">Page {page + 1}</span>
-            <button
-              onClick={() => setPage((p) => p + 1)}
-              disabled={(page + 1) * pageSize >= totalCount || loading}
-              className="inline-flex items-center px-2 py-1 border border-slate-300 rounded bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40"
-            >
-              Next
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
+                    // 4px left SLA color bar
+                    const slaBorderColor = {
+                      NORMAL: "border-l-emerald-500",
+                      AT_RISK: "border-l-amber-500",
+                      BREACHED: "border-l-red-600",
+                      STOPPED: "border-l-slate-300",
+                    }[t.sla.status] || "border-l-slate-300";
+
+                    return (
+                      <tr
+                        key={t.id}
+                        onClick={() => router.push(`/ticket/${t.id}`)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") router.push(`/ticket/${t.id}`);
+                        }}
+                        tabIndex={0}
+                        className={cn(
+                          "h-14 hover:bg-surface-subtle transition-subtle cursor-pointer border-l-4 group select-none",
+                          slaBorderColor
+                        )}
+                        role="link"
+                        aria-label={`View ticket ${t.id} - ${t.title}`}
+                      >
+                        {/* Gutter Rank Column */}
+                        <td className="py-3 px-3 text-center text-caption font-mono-numbers text-content-tertiary">
+                          {rank}
+                        </td>
+
+                        {/* SLA Badge with Live Tabular Countdown */}
+                        <td className="py-3 px-4">
+                          <div className="flex flex-col gap-1 items-start">
+                            <SlaBadge sla={t.sla} isEscalated={t.status === "Escalated"} />
+                            {isRankOneEmergency && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-700 bg-red-100 px-1.5 py-0.2 rounded">
+                                Check-in &lt; 4h
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Case Details */}
+                        <td className="py-3 px-4">
+                          <div className="flex flex-col">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono-numbers text-table font-semibold text-content-primary group-hover:text-brand-600 transition-subtle">
+                                {t.id}
+                              </span>
+                              <span className="font-mono-numbers text-[11px] text-content-tertiary">
+                                {t.tboh_id}
+                              </span>
+                            </div>
+                            <span className="text-table text-content-secondary truncate max-w-sm" title={t.title}>
+                              {t.title}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Agency */}
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            <Avatar name={t.agency_id} id={t.agency_id} size="sm" />
+                            <span className="text-table font-medium text-content-secondary truncate max-w-[120px]">
+                              {t.agency_id}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Intent */}
+                        <td className="py-3 px-3">
+                          <Chip size="sm" variant="brand" className="truncate max-w-[140px]">
+                            {t.intent || "General"}
+                          </Chip>
+                        </td>
+
+                        {/* Priority */}
+                        <td className="py-3 px-3">
+                          <PriorityChip priority={t.priority} />
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-3 px-3">
+                          <StatusChip status={t.status} />
+                        </td>
+
+                        {/* Deadlines (Check-in / LCD) */}
+                        <td className="py-3 px-4">
+                          <div className="flex flex-col text-[11px] gap-0.5">
+                            <div className="flex items-center gap-1.5 text-content-secondary">
+                              <Calendar className="w-3 h-3 text-content-tertiary shrink-0" />
+                              <span
+                                className={cn(
+                                  "font-mono-numbers",
+                                  t.intent === "Emergency Check-in Assist" && "font-semibold text-content-primary"
+                                )}
+                              >
+                                In: {new Date(t.check_in_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
+                              </span>
+                            </div>
+                            {t.lcd_date && (
+                              <div className="flex items-center gap-1.5 text-content-tertiary">
+                                <Clock className="w-3 h-3 text-content-disabled shrink-0" />
+                                <span
+                                  className={cn(
+                                    "font-mono-numbers",
+                                    t.intent !== "Emergency Check-in Assist" && "font-semibold text-content-primary"
+                                  )}
+                                >
+                                  LCD: {new Date(t.lcd_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Assignee */}
+                        <td className="py-3 px-4">
+                          {t.assigned_to ? (
+                            <div className="flex items-center gap-2">
+                              <Avatar name={t.assigned_to} id={t.assigned_to} size="sm" />
+                              <span className="text-table font-medium text-content-secondary">
+                                {t.assigned_to}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-input text-caption text-content-disabled border border-dashed border-border">
+                              Unassigned
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Queue Score (Staff only) */}
+                        {isStaff && (
+                          <td className="py-3 px-3 text-right">
+                            {t.queue_score !== null && t.queue_score !== undefined ? (
+                              <div className="flex flex-col items-end gap-1">
+                                <span className="font-mono-numbers text-caption font-semibold text-content-primary">
+                                  {t.queue_score}
+                                </span>
+                                <div className="w-8 h-1 bg-surface-subtle rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-brand-500 rounded-full"
+                                    style={{ width: `${Math.min(100, (t.queue_score / 150) * 100)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-content-disabled text-caption font-mono-numbers">—</span>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Stacked Card View (< 768px) */}
+            <div className="block md:hidden divide-y divide-border">
+              {tickets.map((t) => (
+                <div
+                  key={t.id}
+                  onClick={() => router.push(`/ticket/${t.id}`)}
+                  className="p-4 hover:bg-surface-subtle transition-subtle cursor-pointer flex flex-col gap-2.5"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono-numbers text-table font-semibold text-content-primary">
+                        {t.id}
+                      </span>
+                      <span className="font-mono-numbers text-[11px] text-content-tertiary">
+                        {t.tboh_id}
+                      </span>
+                    </div>
+                    <SlaBadge sla={t.sla} isEscalated={t.status === "Escalated"} />
+                  </div>
+
+                  <p className="text-table text-content-primary font-medium line-clamp-2">
+                    {t.title}
+                  </p>
+
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <PriorityChip priority={t.priority} />
+                    <StatusChip status={t.status} />
+                    <Chip size="sm" variant="brand">
+                      {t.intent || "General"}
+                    </Chip>
+                  </div>
+
+                  <div className="flex items-center justify-between text-caption text-content-secondary pt-2 border-t border-border/60">
+                    <span className="font-mono-numbers">
+                      In: {new Date(t.check_in_date).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
+                    </span>
+                    <span>{t.assigned_to ? `Assigned: ${t.assigned_to}` : "Unassigned"}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* 5. Pagination Bar */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-border bg-surface-subtle/50 text-caption text-content-secondary">
+              <span className="font-mono-numbers">
+                Showing {startItem}–{endItem} of {totalCount.toLocaleString()} cases
+              </span>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page === 0 || loading}
+                  icon={<ChevronLeft className="w-3.5 h-3.5" />}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                >
+                  Previous
+                </Button>
+                <span className="font-mono-numbers px-2">
+                  Page {page + 1} of {Math.max(1, totalPages)}
+                </span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page + 1 >= totalPages || loading}
+                  icon={<ChevronRight className="w-3.5 h-3.5" />}
+                  iconPosition="right"
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* Create Ticket Modal */}
-      {isCreateOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 border border-slate-200">
-            <h2 className="text-lg font-bold text-slate-900 mb-1">Create New Operations Case</h2>
-            <p className="text-xs text-slate-500 mb-4">
-              Enter case details. Shared TBOH codes automatically link prior booking history.
-            </p>
+      {/* 6. Create Ticket Modal */}
+      <Modal
+        isOpen={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        title="Create Operations Ticket"
+        subtitle="Dispatch an operations incident with atomic tenant verification and travel SLA computation."
+        maxWidth="lg"
+      >
+        <form onSubmit={handleCreateSubmit} className="flex flex-col gap-5 pt-2">
+          {createError && (
+            <div className="p-3 bg-red-50 text-red-700 text-caption rounded-input border border-red-200">
+              {createError}
+            </div>
+          )}
 
-            {createError && (
-              <div className="mb-4 p-3 rounded bg-red-50 border border-red-200 text-xs text-red-700">
-                {createError}
-              </div>
-            )}
+          {/* Section 1: Booking & Tenant Parameters */}
+          <div className="flex flex-col gap-3">
+            <h4 className="text-micro-label uppercase text-content-tertiary font-semibold tracking-wider">
+              1. Booking &amp; Itinerary
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                label="TBOH Booking ID *"
+                value={createTboh}
+                onChange={(e) => setCreateTboh(e.target.value.toUpperCase())}
+                placeholder="TBOH-1001"
+                required
+                helperText="External supplier booking identifier"
+              />
 
-            <form onSubmit={handleCreateSubmit} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Ticket Title</label>
-                <input
-                  type="text"
-                  required
-                  value={createTitle}
-                  onChange={(e) => setCreateTitle(e.target.value)}
-                  placeholder="e.g. Flight delay or guest arrival check-in issue"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-indigo-500 text-xs"
+              {isStaff ? (
+                <Select
+                  label="Agency Tenant *"
+                  value={createAgency}
+                  onChange={(e) => setCreateAgency(e.target.value)}
+                  options={[
+                    { value: "AGY-001", label: "Grand Travel Agency (AGY-001)" },
+                    { value: "AGY-002", label: "Apex Journeys (AGY-002)" },
+                    { value: "AGY-003", label: "Skyline Holidays (AGY-003)" },
+                    { value: "AGY-004", label: "Nomad Corp (AGY-004)" },
+                  ]}
                 />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Description</label>
-                <textarea
-                  required
-                  rows={3}
-                  value={createDesc}
-                  onChange={(e) => setCreateDesc(e.target.value)}
-                  placeholder="Operational context and specific guest request"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-indigo-500 text-xs"
+              ) : (
+                <Input
+                  label="Agency Tenant"
+                  value={currentUser.name}
+                  disabled
+                  helperText="Strictly tenant-scoped to your agency"
                 />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">TBOH Booking ID</label>
-                  <input
-                    type="text"
-                    required
-                    pattern="^TBOH-[A-Za-z0-9-]{3,30}$"
-                    value={createTboh}
-                    onChange={(e) => setCreateTboh(e.target.value)}
-                    placeholder="TBOH-12345"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-indigo-500 text-xs font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Priority</label>
-                  <select
-                    value={createPrio}
-                    onChange={(e) => setCreatePrio(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-indigo-500 text-xs"
-                  >
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                    <option value="Urgent">Urgent</option>
-                  </select>
-                </div>
-              </div>
-
-              {isStaff && (
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Agency ID</label>
-                  <select
-                    value={createAgency}
-                    onChange={(e) => setCreateAgency(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-indigo-500 text-xs"
-                  >
-                    <option value="AGY-001">Grand Travel Agency (AGY-001)</option>
-                    <option value="AGY-002">Apex Journeys (AGY-002)</option>
-                    <option value="AGY-003">Horizon Holidays (AGY-003)</option>
-                  </select>
-                </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Check-in Date & Time</label>
-                  <input
-                    type="datetime-local"
-                    required
-                    value={createCheckin}
-                    onChange={(e) => setCreateCheckin(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-indigo-500 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">LCD Date (Optional)</label>
-                  <input
-                    type="datetime-local"
-                    value={createLcd}
-                    onChange={(e) => setCreateLcd(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-indigo-500 text-xs"
-                  />
-                </div>
-              </div>
+              <Input
+                type="datetime-local"
+                label="Guest Check-in Date *"
+                value={createCheckin}
+                onChange={(e) => setCreateCheckin(e.target.value)}
+                required
+                helperText="Controlling deadline for Emergency Assist"
+              />
 
+              <Input
+                type="datetime-local"
+                label="Last Cancellation Date (LCD)"
+                value={createLcd}
+                onChange={(e) => setCreateLcd(e.target.value)}
+                helperText="Controlling deadline for Refund &amp; Cancellation"
+              />
+            </div>
+          </div>
+
+          {/* Section 2: Issue Details */}
+          <div className="flex flex-col gap-3 pt-3 border-t border-border">
+            <h4 className="text-micro-label uppercase text-content-tertiary font-semibold tracking-wider">
+              2. Operations Issue
+            </h4>
+
+            <Input
+              label="Subject / Ticket Title *"
+              value={createTitle}
+              onChange={(e) => setCreateTitle(e.target.value)}
+              placeholder="e.g. Supplier failed to confirm room allocation"
+              required
+            />
+
+            <Textarea
+              label="Issue Description *"
+              value={createDesc}
+              onChange={(e) => setCreateDesc(e.target.value)}
+              placeholder="Detailed description of guest status, supplier communication, and required resolution..."
+              rows={3}
+              required
+            />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block font-semibold text-slate-700">Intent Category</label>
-                  <button
-                    type="button"
-                    onClick={handleSuggest}
-                    disabled={suggestingIntent || (!createTitle && !createDesc)}
-                    className="inline-flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold"
-                  >
-                    <Sparkles className="w-3 h-3 text-indigo-500" />
-                    {suggestingIntent ? "Suggesting..." : "Auto-Suggest"}
-                  </button>
-                </div>
-                <input
-                  type="text"
+                <Select
+                  label="Category / Intent"
                   value={createIntent}
                   onChange={(e) => setCreateIntent(e.target.value)}
-                  placeholder="e.g. Refund Request or Emergency Check-in Assist"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-indigo-500 text-xs"
+                  options={[
+                    { value: "", label: "Select category..." },
+                    { value: "Refund Request", label: "Refund Request" },
+                    { value: "Cancellation Inconvenience", label: "Cancellation Inconvenience" },
+                    { value: "Date Amendment", label: "Date Amendment" },
+                    { value: "Bedding / Room Preference", label: "Bedding / Room Preference" },
+                    { value: "Voucher Resend", label: "Voucher Resend" },
+                    { value: "Emergency Check-in Assist", label: "Emergency Check-in Assist" },
+                    { value: "Unclassified", label: "Unclassified" },
+                  ]}
                 />
+
+                <div className="mt-2 flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    loading={suggestingIntent}
+                    icon={<Sparkles className="w-3.5 h-3.5 text-brand-600" />}
+                    onClick={handleSuggest}
+                    className="text-brand-600 hover:text-brand-700 p-0 text-caption"
+                  >
+                    Auto-suggest intent
+                  </Button>
+
+                  {suggestedIntentChip && (
+                    <div className="flex items-center gap-1.5 bg-brand-50 border border-brand-200 px-2 py-0.5 rounded-input text-caption text-brand-700">
+                      <span>Suggested: {suggestedIntentChip}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCreateIntent(suggestedIntentChip);
+                          setSuggestedIntentChip(null);
+                        }}
+                        className="font-bold underline ml-1 cursor-pointer"
+                        title="Accept suggestion"
+                      >
+                        Apply
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSuggestedIntentChip(null)}
+                        className="cursor-pointer text-content-tertiary hover:text-content-primary"
+                        title="Dismiss"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setIsCreateOpen(false)}
-                  className="px-3 py-2 rounded border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="px-4 py-2 rounded bg-indigo-600 text-white font-semibold hover:bg-indigo-700 disabled:opacity-50"
-                >
-                  {creating ? "Submitting..." : "Create Case"}
-                </button>
-              </div>
-            </form>
+              <Select
+                label="Priority Level *"
+                value={createPrio}
+                onChange={(e) => setCreatePrio(e.target.value as "Low" | "Medium" | "High" | "Urgent")}
+                options={[
+                  { value: "Low", label: "Low (Normal SLA)" },
+                  { value: "Medium", label: "Medium (Standard 24h SLA)" },
+                  { value: "High", label: "High (Accelerated SLA)" },
+                  { value: "Urgent", label: "Urgent (Immediate Triage)" },
+                ]}
+              />
+            </div>
           </div>
-        </div>
-      )}
+
+          {/* Modal Actions */}
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={() => setIsCreateOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              disabled={!isFormValid || creating}
+              loading={creating}
+            >
+              Dispatch Ticket
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

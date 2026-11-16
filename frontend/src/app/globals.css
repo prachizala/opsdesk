@@ -1,15 +1,132 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  /* Typography Stacks */
+  --font-inter: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Canvas & Surface Tokens */
+  --canvas: #F7F8FA;
+  --surface: #FFFFFF;
+  --surface-subtle: #F1F3F6;
+  --border: #E3E7ED;
+  --border-strong: #CBD2DC;
+
+  /* Typography Tokens (Contrast >= 4.5:1 on white) */
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-tertiary: #64748B;
+  --text-disabled: #94A3B8;
+
+  /* Brand Tokens (Ocean Teal) */
+  --brand-50: #ECFEFF;
+  --brand-100: #CFFAFE;
+  --brand-500: #0E9AA7;
+  --brand-600: #0B7F8B;
+  --brand-700: #0A6772;
+
+  /* SLA Semantic Tokens (Always paired with Icon + Label) */
+  --sla-normal-text: #15803D;
+  --sla-normal-bg: #DCFCE7;
+  --sla-at-risk-text: #B45309;
+  --sla-at-risk-bg: #FEF3C7;
+  --sla-breached-text: #B91C1C;
+  --sla-breached-bg: #FEE2E2;
+  --sla-escalated-text: #6D28D9;
+  --sla-escalated-bg: #EDE9FE;
+
+  /* Priority Tokens */
+  --priority-urgent-text: #B91C1C;
+  --priority-urgent-bg: #FEE2E2;
+  --priority-high-text: #C2410C;
+  --priority-high-bg: #FFEDD5;
+  --priority-medium-text: #1D4ED8;
+  --priority-medium-bg: #DBEAFE;
+  --priority-low-text: #475569;
+  --priority-low-bg: #F1F5F9;
+
+  /* Status Tokens */
+  --status-new-text: #1D4ED8;
+  --status-new-bg: #EFF6FF;
+  --status-open-text: #0E9AA7;
+  --status-open-bg: #ECFEFF;
+  --status-pending-text: #B45309;
+  --status-pending-bg: #FEF3C7;
+  --status-escalated-text: #6D28D9;
+  --status-escalated-bg: #EDE9FE;
+  --status-resolved-text: #15803D;
+  --status-resolved-bg: #DCFCE7;
+  --status-closed-text: #475569;
+  --status-closed-bg: #F1F5F9;
+
+  /* Geometry & Radius */
+  --radius-input: 6px;
+  --radius-card: 10px;
+  --radius-modal: 14px;
+
+  /* Motion Tokens */
+  --duration-hover: 120ms;
+  --duration-panel: 180ms;
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    background-color: var(--canvas);
+    color: var(--text-primary);
+    font-family: var(--font-inter);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Strict focus visible ring (2px brand-500 with 2px offset) */
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [tabindex="0"]:focus-visible {
+    outline: 2px solid var(--brand-500) !important;
+    outline-offset: 2px !important;
+  }
+}
+
+/* Strict Tabular Numbers for IDs, Timestamps, and Countdowns */
+.font-mono-numbers {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Micro-interaction transition defaults */
+.transition-subtle {
+  transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
+  transition-timing-function: var(--ease-out);
+  transition-duration: var(--duration-hover);
+}
+
+.transition-panel {
+  transition-property: all;
+  transition-timing-function: var(--ease-out);
+  transition-duration: var(--duration-panel);
+}
+
+/* Accessibility: respects reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
