@@ -7,7 +7,7 @@ import { CommandPalette } from "@/components/CommandPalette";
 
 export const metadata: Metadata = {
   title: "OpsDesk - B2B Travel Operations Dispatcher",
-  description: "Deterministic B2B travel operations platform with LCD-aware SLA routing and AI triage.",
+  description: "Calm mission control for travel operations with LCD-aware SLA routing and AI triage.",
 };
 
 export default function RootLayout({
@@ -17,12 +17,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">
+      <body className="min-h-screen bg-canvas text-content-primary antialiased font-sans">
         <UserProvider>
           <ToastProvider>
             <TopNav />
             <CommandPalette />
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <main className="max-w-[1440px] mx-auto px-6 py-6">
               {children}
             </main>
           </ToastProvider>
