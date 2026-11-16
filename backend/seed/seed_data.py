@@ -1,5 +1,13 @@
+import os
+import sys
 import random
 from datetime import datetime, timedelta
+
+# Ensure repo root is on sys.path when script is invoked directly
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
 from faker import Faker
 from sqlalchemy.orm import Session
 from backend.app.database import Base, SessionLocal
@@ -21,7 +29,7 @@ THEME_MAPPINGS = {
     "Unclassified": ["General Operations Inquiry"]
 }
 
-def seed_database(db: Session, engine_bind=None, total_tickets: int = 5000):
+def seed_database(db: Session, engine_bind=None, total_tickets: int = 5000, drop_existing: bool = False):
     """
     Seeds the database with deterministic fixtures and 5,000 synthetic records.
     - All historical tickets (past check-in) are strictly marked 'Closed' or 'Resolved' (SLA STOPPED).
@@ -35,8 +43,9 @@ def seed_database(db: Session, engine_bind=None, total_tickets: int = 5000):
     Faker.seed(42)
     random.seed(42)
 
-    # Recreate tables cleanly using the active database bind (never touches global engine if passed a test session)
-    Base.metadata.drop_all(bind=target_bind)
+    # Recreate tables cleanly if drop_existing requested, otherwise ensure created
+    if drop_existing:
+        Base.metadata.drop_all(bind=target_bind)
     Base.metadata.create_all(bind=target_bind)
 
     print("Creating agencies...")
@@ -360,8 +369,46 @@ def seed_database(db: Session, engine_bind=None, total_tickets: int = 5000):
     print(f"Database successfully seeded with {total_tickets} tickets.")
 
 if __name__ == "__main__":
+    import argparse
+    import sys
+    from sqlalchemy import inspect, text
+    from backend.app.config import DATABASE_URL
+    from backend.app.database import engine
+
+    parser = argparse.ArgumentParser(description="Seed or reset OpsDesk development database")
+    parser.add_argument("--reset", action="store_true", help="Reset and regenerate dev database relative to current wall-clock time")
+    parser.add_argument("--yes", "-y", action="store_true", help="Confirm resetting database without safety prompt")
+    parser.add_argument("--tickets", type=int, default=5000, help="Total ticket count (default: 5000)")
+    args = parser.parse_args()
+
+    # Safety validation: ensure target is a local dev database unless --yes passed
+    is_sqlite = DATABASE_URL.startswith("sqlite")
+    is_dev_db = "opsdesk.db" in DATABASE_URL or ":memory:" in DATABASE_URL
+    if not (is_sqlite and is_dev_db) and not args.yes:
+        print(f"Safety Check Failed: DATABASE_URL '{DATABASE_URL}' does not appear to be a local dev SQLite database (opsdesk.db). Pass --yes to force.")
+        sys.exit(1)
+
+    inspector = inspect(engine)
+    has_tickets_table = inspector.has_table("tickets")
+    existing_count = 0
+    if has_tickets_table:
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT COUNT(*) FROM tickets"))
+            existing_count = result.scalar() or 0
+
+    if existing_count > 0 and not args.reset:
+        print(f"Error: Database already contains {existing_count} tickets. Use --reset to drop tables and re-seed.")
+        sys.exit(1)
+
+    if args.reset:
+        print(f"Resetting database schema on '{DATABASE_URL}'...")
+        Base.metadata.drop_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
+        print("Schema reset complete.")
+
+    print(f"Starting database seed process (reset={args.reset}, tickets={args.tickets}, target='{DATABASE_URL}')...")
     db = SessionLocal()
     try:
-        seed_database(db, total_tickets=5000)
+        seed_database(db, engine_bind=engine, total_tickets=args.tickets, drop_existing=False)
     finally:
         db.close()
