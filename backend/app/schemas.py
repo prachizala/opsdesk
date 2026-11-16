@@ -49,13 +49,15 @@ class TicketCreateSchema(BaseModel):
     tboh_id: str = Field(..., pattern=r"^TBOH-[A-Za-z0-9-]{3,30}$")
     priority: Literal["Low", "Medium", "High", "Urgent"] = "Medium"
     check_in_date: datetime
-    lcd_date: datetime
+    lcd_date: Optional[datetime] = None
     intent: Optional[ALLOWED_INTENTS] = None
     agency_id: Optional[str] = None  # Ignored for Requesters, caller agency used instead
 
     @field_validator("check_in_date", "lcd_date", mode="before")
     @classmethod
-    def validate_and_normalize_datetimes(cls, v: Any) -> datetime:
+    def validate_and_normalize_datetimes(cls, v: Any) -> Any:
+        if v is None:
+            return None
         return normalize_utc_datetime(v)
 
 class TicketAssignSchema(BaseModel):
@@ -70,6 +72,9 @@ class TicketEscalateSchema(BaseModel):
 class TicketTransferSchema(BaseModel):
     target_agent_id: str = Field(..., min_length=1, max_length=100)
     reason: str = Field(..., min_length=1, max_length=1000)
+
+class TicketLinkSuggestionSchema(BaseModel):
+    bug_link: str = Field(..., min_length=3, max_length=200)
 
 class MessageCreateSchema(BaseModel):
     message_type: MESSAGE_TYPES = Field(..., description="'PublicReply' or 'InternalNote'")

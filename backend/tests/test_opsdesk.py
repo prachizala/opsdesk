@@ -21,7 +21,7 @@ from backend.services.routing_engine import (
     select_agent_tier1,
     calculate_queue_score_tier2
 )
-from backend.services.sla_engine import evaluate_travel_sla
+from backend.services.sla_engine import evaluate_travel_sla, effective_deadline_hours
 from backend.services.intent_classifier import suggest_ticket_intent
 from backend.seed.seed_data import seed_database
 
@@ -219,13 +219,14 @@ def test_contracts_golden_vectors():
         exp = case["expected_output"]
         now = datetime.fromisoformat(inp["now"].replace("Z", ""))
         cid = datetime.fromisoformat(inp["check_in_date"].replace("Z", ""))
-        lcd = datetime.fromisoformat(inp["lcd_date"].replace("Z", ""))
+        lcd = datetime.fromisoformat(inp["lcd_date"].replace("Z", "")) if inp.get("lcd_date") else None
         
         act = evaluate_travel_sla(
             status=inp["status"],
             check_in_date=cid,
             lcd_date=lcd,
             priority=inp["priority"],
+            intent=inp.get("intent"),
             now=now
         )
         assert act["status"] == exp["status"], f"Case {case['case_id']} status mismatch: {act['status']} != {exp['status']}"
@@ -241,10 +242,13 @@ def test_contracts_golden_vectors():
         exp = case["expected_output"]
         now = datetime.fromisoformat(inp["now"].replace("Z", ""))
         cid = datetime.fromisoformat(inp["check_in_date"].replace("Z", ""))
+        lcd = datetime.fromisoformat(inp["lcd_date"].replace("Z", "")) if inp.get("lcd_date") else None
         
         score = calculate_queue_score_tier2(
             priority=inp["priority"],
             check_in_date=cid,
+            lcd_date=lcd,
+            intent=inp.get("intent"),
             now=now
         )
         assert score == exp["score"], f"Queue case {case['case_id']} mismatch: {score} != {exp['score']}"
@@ -342,13 +346,13 @@ def test_seed_tboh_fixtures(db_session: Session):
     assert t1001.status == "Closed"
     assert t1002.status == "Closed"
 
-    # TCK-1004: Urgent, MEA, ~2.5h in future. lcd_date >= check_in_date so check-in is urgent factor.
+    # TCK-1004: Urgent, MEA, ~2.5h in future. lcd_date is None for check-in assist.
     t1004 = db_session.query(Ticket).filter(Ticket.id == "TCK-1004").first()
     assert t1004 is not None
     assert t1004.priority == "Urgent"
     assert t1004.status == "Open"
     assert t1004.check_in_date > datetime.utcnow()
-    assert t1004.lcd_date >= t1004.check_in_date
+    assert t1004.lcd_date is None
     assert "active cases" in t1004.routing_reason
 
     # TCK-1005: Side thread with recipient
@@ -359,13 +363,13 @@ def test_seed_tboh_fixtures(db_session: Session):
     assert len(sc.recipients) > 0
     assert sc.recipients[0].email == "reservations@vendor.example.com"
 
-    # TCK-1006: Urgent, ~45m in future. lcd_date >= check_in_date so check-in is urgent factor.
+    # TCK-1006: Urgent, ~45m in future. lcd_date is None for voucher resend.
     t1006 = db_session.query(Ticket).filter(Ticket.id == "TCK-1006").first()
     assert t1006 is not None
     assert t1006.priority == "Urgent"
     assert t1006.status == "Open"
     assert t1006.check_in_date > datetime.utcnow()
-    assert t1006.lcd_date >= t1006.check_in_date
+    assert t1006.lcd_date is None
     assert "active cases" in t1006.routing_reason
 
     # TCK-1007: Journey B Unassigned Urgent triage fixture (~2.25h in future, AGY-001)
@@ -373,8 +377,23 @@ def test_seed_tboh_fixtures(db_session: Session):
     assert t1007 is not None
     assert t1007.priority == "Urgent"
     assert t1007.status == "New"
+    assert t1007.lcd_date is None
     assert t1007.assigned_to is None
     assert t1007.check_in_date > datetime.utcnow()
+
+    # TCK-1008: Refund Request with 3h LCD and 5d check-in, linked to TCK-1001 via TBOH-89104
+    t1008 = db_session.query(Ticket).filter(Ticket.id == "TCK-1008").first()
+    assert t1008 is not None
+    assert t1008.tboh_id == "TBOH-89104"
+    assert t1008.priority == "High"
+    assert t1008.status == "Open"
+    assert t1008.intent == "Refund Request"
+    assert t1008.assigned_to == "USR-101"
+    assert t1008.lcd_date is not None
+    assert t1008.lcd_date < t1008.check_in_date
+    links_1008 = db_session.query(TicketLink).filter(TicketLink.ticket_id == "TCK-1008").all()
+    assert len(links_1008) > 0
+    assert links_1008[0].linked_ticket_id == "TCK-1001"
 
 
 # ============================================================================
@@ -751,7 +770,7 @@ def test_triage_queue_score_global_sorting(client: TestClient, db_session: Sessi
         Ticket.assigned_to.is_(None)
     ).all()
     global_max_score = max(
-        calculate_queue_score_tier2(t.priority, t.check_in_date, now=now)
+        calculate_queue_score_tier2(t.priority, t.check_in_date, lcd_date=t.lcd_date, intent=t.intent, now=now)
         for t in all_unassigned
     )
     assert abs(data_p1["tickets"][0]["queue_score"] - global_max_score) < 0.01
@@ -1051,4 +1070,410 @@ def test_schema_validation_failures(client: TestClient):
     # 8. Invalid status Literal
     res8 = client.post("/api/tickets/TCK-1005/status", json={"status": "ArchivedStatus"}, headers={"X-User-Id": "USR-101"})
     assert res8.status_code == 422
+
+
+# ============================================================================
+# 16. INTENT-AWARE SLA & LCD TESTS
+# ============================================================================
+
+def test_seed_zero_open_refund_cancellation_tickets_with_past_lcd(db_session: Session):
+    """
+    Verifies that for active (non-Closed, non-Resolved) tickets with Refund Request or
+    Cancellation Inconvenience intents, lcd_date is in the future (> now) and <= check_in_date.
+    There should be zero open Refund/Cancellation tickets seeded with a past LCD.
+    """
+    now = datetime.utcnow()
+    cancellation_intents = ["Refund Request", "Cancellation Inconvenience"]
+    open_tickets = db_session.query(Ticket).filter(
+        Ticket.status.notin_(["Closed", "Resolved"]),
+        Ticket.intent.in_(cancellation_intents)
+    ).all()
+
+    assert len(open_tickets) > 0, "Expected seeded open refund/cancellation tickets"
+    past_lcd_tickets = [t for t in open_tickets if t.lcd_date is not None and t.lcd_date <= now]
+    assert len(past_lcd_tickets) == 0, f"Found {len(past_lcd_tickets)} open tickets with past LCD"
+
+
+def test_sla_intent_cancellation_uses_lcd():
+    """
+    Cancellation Inconvenience intent must factor in lcd_date if present.
+    If check_in_date is 48h away and lcd_date is 3h away, effective urgency is 3h (AT_RISK for Urgent).
+    """
+    now = datetime(2026, 11, 16, 12, 0)
+    res = evaluate_travel_sla(
+        status="Open",
+        check_in_date=datetime(2026, 11, 18, 12, 0),  # 48h
+        lcd_date=datetime(2026, 11, 16, 15, 0),       # 3h
+        priority="Urgent",
+        intent="Cancellation Inconvenience",
+        now=now
+    )
+    assert res["status"] == "AT_RISK"
+    assert res["hours_remaining"] == 3.0
+
+
+def test_sla_intent_checkin_ignores_lcd():
+    """
+    Emergency Check-in Assist intent must ignore lcd_date even if lcd_date is past.
+    It strictly uses check_in_date for urgency.
+    """
+    now = datetime(2026, 11, 16, 12, 0)
+    res = evaluate_travel_sla(
+        status="Open",
+        check_in_date=datetime(2026, 11, 17, 12, 0),  # 24h
+        lcd_date=datetime(2026, 11, 15, 12, 0),       # past (-24h)
+        priority="Urgent",
+        intent="Emergency Check-in Assist",
+        now=now
+    )
+    assert res["status"] == "NORMAL"
+    assert res["hours_remaining"] == 24.0
+
+
+def test_sla_unclassified_uses_lcd():
+    """
+    Unclassified (or None) intent defaults safely to min(check_in, lcd).
+    """
+    now = datetime(2026, 11, 16, 12, 0)
+    res_unclassified = evaluate_travel_sla(
+        status="Open",
+        check_in_date=datetime(2026, 11, 18, 12, 0),  # 48h
+        lcd_date=datetime(2026, 11, 16, 14, 0),       # 2h
+        priority="Urgent",
+        intent="Unclassified",
+        now=now
+    )
+    assert res_unclassified["status"] == "AT_RISK"
+    assert res_unclassified["hours_remaining"] == 2.0
+
+    res_none = evaluate_travel_sla(
+        status="Open",
+        check_in_date=datetime(2026, 11, 18, 12, 0),
+        lcd_date=datetime(2026, 11, 16, 14, 0),
+        priority="Urgent",
+        intent=None,
+        now=now
+    )
+    assert res_none["status"] == "AT_RISK"
+    assert res_none["hours_remaining"] == 2.0
+
+
+def test_api_emergency_checkin_ignores_imminent_lcd_sla(client: TestClient):
+    """
+    Verifies that for an Emergency Check-in Assist ticket with imminent LCD (1h) and
+    distant check-in (48h), the API endpoint returns SLA evaluated strictly on check-in
+    (NORMAL, ~48h remaining), proving intent is passed end-to-end to evaluate_travel_sla.
+    """
+    now = datetime.utcnow().replace(microsecond=0)
+    checkin_dt = now + timedelta(hours=48)
+    lcd_dt = now + timedelta(hours=1)
+
+    payload = {
+        "title": "Check-in Assist with Imminent LCD",
+        "description": "Guest arriving in 2 days. LCD happens to be in 1 hour.",
+        "tboh_id": "TBOH-IGN-LCD-01",
+        "priority": "Urgent",
+        "check_in_date": checkin_dt.isoformat() + "Z",
+        "lcd_date": lcd_dt.isoformat() + "Z",
+        "intent": "Emergency Check-in Assist",
+        "agency_id": "AGY-001"
+    }
+    resp = client.post("/api/tickets", json=payload, headers={"X-User-Id": "USR-101"})
+    assert resp.status_code == 201
+    ticket_id = resp.json()["id"]
+
+    detail_res = client.get(f"/api/tickets/{ticket_id}", headers={"X-User-Id": "USR-101"})
+    assert detail_res.status_code == 200
+    sla = detail_res.json()["sla"]
+    # If LCD was used, SLA would be AT_RISK or BREACHED (1h <= 6h Urgent threshold).
+    # Since Emergency Check-in Assist ignores LCD, SLA is NORMAL (~48h remaining).
+    assert sla["status"] == "NORMAL"
+    assert sla["hours_remaining"] is not None
+    assert sla["hours_remaining"] > 40.0
+
+
+def test_queue_score_refund_intent_uses_lcd_higher_rank():
+    """
+    Verifies Tier-2 Queue Scoring with Intent-Aware Urgency:
+    Refund ticket with same priority (Medium), LCD in 3h and check-in in 5d,
+    ranks ABOVE a Refund ticket with check-in in 2d and no LCD.
+    """
+    now = datetime(2026, 11, 16, 12, 0)
+    # Ticket A: Medium priority, Refund Request, check-in in 5 days (120h), LCD in 3 hours.
+    # Effective hours = 3.0h (<= 6.0h -> modifier +800). Total score = 200 + 800 = 1000.
+    score_a = calculate_queue_score_tier2(
+        priority="Medium",
+        check_in_date=datetime(2026, 11, 21, 12, 0),
+        lcd_date=datetime(2026, 11, 16, 15, 0),
+        intent="Refund Request",
+        now=now
+    )
+
+    # Ticket B: Medium priority, Refund Request, check-in in 2 days (48h), no LCD.
+    # Effective hours = 48.0h (> 24.0h -> modifier +0). Total score = 200 + 0 = 200.
+    score_b = calculate_queue_score_tier2(
+        priority="Medium",
+        check_in_date=datetime(2026, 11, 18, 12, 0),
+        lcd_date=None,
+        intent="Refund Request",
+        now=now
+    )
+
+    assert score_a == 1000.0
+    assert score_b == 200.0
+    assert score_a > score_b, f"Expected Ticket A ({score_a}) to outrank Ticket B ({score_b})"
+
+
+def test_queue_score_checkin_intent_ignores_past_lcd():
+    """
+    Verifies that for Emergency Check-in Assist tickets, calculate_queue_score_tier2
+    ignores past LCD and strictly scores urgency based on check_in_date.
+    """
+    now = datetime(2026, 11, 16, 12, 0)
+    # Urgent ticket, check-in in 24 hours (+300 modifier), past LCD (-2h).
+    # If LCD was used, effective hours would be -2h (<=2h -> modifier +2000, score 3000).
+    # Because intent is Emergency Check-in Assist, LCD is ignored: effective hours = 24h -> modifier +300, score 1300.
+    score = calculate_queue_score_tier2(
+        priority="Urgent",
+        check_in_date=datetime(2026, 11, 17, 12, 0),
+        lcd_date=datetime(2026, 11, 16, 10, 0),
+        intent="Emergency Check-in Assist",
+        now=now
+    )
+    assert score == 1300.0
+
+
+# ============================================================================
+# 17. PART 1 HARDENING TESTS: EDGE CASES, ROLES, & PAGINATION
+# ============================================================================
+
+def test_effective_deadline_hours_edge_cases():
+    """
+    Edge case tests for effective_deadline_hours helper:
+    1. intent=None with lcd_date present: uses min(check_in, lcd)
+    2. intent='Unclassified' with lcd_date=None: strictly uses check_in_date
+    3. intent='Refund Request' with past lcd_date: returns negative/breached hours
+    4. check-in intents (Emergency Check-in Assist) with past lcd_date: ignores LCD, strictly uses check_in_date
+    """
+    now = datetime(2026, 11, 16, 12, 0)
+
+    # 1. intent=None + lcd present
+    h1 = effective_deadline_hours(
+        check_in_date=datetime(2026, 11, 18, 12, 0),  # +48h
+        lcd_date=datetime(2026, 11, 16, 17, 0),       # +5h
+        intent=None,
+        now=now
+    )
+    assert abs(h1 - 5.0) < 0.01
+
+    # 2. Unclassified + lcd None
+    h2 = effective_deadline_hours(
+        check_in_date=datetime(2026, 11, 16, 22, 0),  # +10h
+        lcd_date=None,
+        intent="Unclassified",
+        now=now
+    )
+    assert abs(h2 - 10.0) < 0.01
+
+    # 3. Refund Request + past lcd
+    h3 = effective_deadline_hours(
+        check_in_date=datetime(2026, 11, 17, 12, 0),  # +24h
+        lcd_date=datetime(2026, 11, 16, 10, 0),       # -2h
+        intent="Refund Request",
+        now=now
+    )
+    assert abs(h3 - (-2.0)) < 0.01
+
+    # 4. Check-in intent + past lcd
+    h4 = effective_deadline_hours(
+        check_in_date=datetime(2026, 11, 17, 0, 0),   # +12h
+        lcd_date=datetime(2026, 11, 16, 7, 0),        # -5h
+        intent="Emergency Check-in Assist",
+        now=now
+    )
+    assert abs(h4 - 12.0) < 0.01
+
+
+def test_requester_cannot_assign_unassign_escalate_403(client: TestClient):
+    """
+    Verifies that Requesters (e.g. USR-201) receive 403 Forbidden on:
+    - POST /api/tickets/{id}/assign
+    - POST /api/tickets/{id}/unassign
+    - POST /api/tickets/{id}/escalate
+    """
+    # 1. Assign
+    res_assign = client.post(
+        "/api/tickets/TCK-1004/assign",
+        json={"agent_id": "USR-102"},
+        headers={"X-User-Id": "USR-201"}
+    )
+    assert res_assign.status_code == 403
+
+    # 2. Unassign
+    res_unassign = client.post(
+        "/api/tickets/TCK-1004/unassign",
+        headers={"X-User-Id": "USR-201"}
+    )
+    assert res_unassign.status_code == 403
+
+    # 3. Escalate
+    res_esc = client.post(
+        "/api/tickets/TCK-1004/escalate",
+        json={"reason": "Customer demands escalation"},
+        headers={"X-User-Id": "USR-201"}
+    )
+    assert res_esc.status_code == 403
+
+
+def test_staff_can_assign_and_unassign_ticket(client: TestClient, db_session: Session):
+    """
+    Verifies that staff members (Agent USR-101) can unassign a ticket back to triage
+    and reassign it to an available agent.
+    """
+    # Unassign TCK-1004
+    res_un = client.post("/api/tickets/TCK-1004/unassign", headers={"X-User-Id": "USR-101"})
+    assert res_un.status_code == 200
+    assert res_un.json()["assigned_to"] is None
+
+    # Reassign TCK-1004 to USR-102
+    res_as = client.post(
+        "/api/tickets/TCK-1004/assign",
+        json={"agent_id": "USR-102"},
+        headers={"X-User-Id": "USR-101"}
+    )
+    assert res_as.status_code == 200
+    assert res_as.json()["assigned_to"] == "USR-102"
+
+
+def test_requester_views_and_pagination(client: TestClient):
+    """
+    Verifies edge cases for GET /api/tickets:
+    - Requester view=by_intent returns only tickets matching their agency and intent
+    - Requester view=linked strictly filters to intra-agency linked tickets
+    - Response pagination includes accurate total count
+    """
+    # 1. by_intent view for Requester
+    res = client.get("/api/tickets?view=by_intent&intent=Refund Request&limit=10&offset=0", headers={"X-User-Id": "USR-201"})
+    assert res.status_code == 200
+    data = res.json()
+    assert "total" in data
+    assert "tickets" in data
+    for t in data["tickets"]:
+        assert t["intent"] == "Refund Request"
+        assert t["agency_id"] == "AGY-001"
+        assert t["assigned_to"] is None
+        assert t["routing_reason"] is None
+        assert t["queue_score"] is None
+
+    # 2. linked view for Requester
+    res_lnk = client.get("/api/tickets?view=linked", headers={"X-User-Id": "USR-201"})
+    assert res_lnk.status_code == 200
+    data_lnk = res_lnk.json()
+    for t in data_lnk["tickets"]:
+        assert t["agency_id"] == "AGY-001"
+
+
+# ============================================================================
+# 18. PART 2 TESTS: MVP-5 INSIGHTS / BUG LINKS & MVP-6 DATA EXPORT
+# ============================================================================
+
+def test_link_suggestion_staff_200_requester_403(client: TestClient):
+    """
+    Verifies POST /api/tickets/{id}/link-suggestion:
+    - Staff (Agent USR-101) can attach a bug/defect link -> 200
+    - Requester (USR-201) receives 403 Forbidden
+    - Audit log records ticket.suggested_bug_linked
+    """
+    payload = {"bug_link": "https://jira.internal.example.com/browse/OPS-4091"}
+
+    # Requester receives 403
+    res_req = client.post("/api/tickets/TCK-1004/link-suggestion", json=payload, headers={"X-User-Id": "USR-201"})
+    assert res_req.status_code == 403
+
+    # Staff receives 200
+    res_staff = client.post("/api/tickets/TCK-1004/link-suggestion", json=payload, headers={"X-User-Id": "USR-101"})
+    assert res_staff.status_code == 200
+    data = res_staff.json()
+    assert data["suggested_bug_link"] == "https://jira.internal.example.com/browse/OPS-4091"
+
+    # Detail endpoint reflects suggested bug link
+    detail = client.get("/api/tickets/TCK-1004", headers={"X-User-Id": "USR-101"}).json()
+    assert detail["suggested_bug_link"] == "https://jira.internal.example.com/browse/OPS-4091"
+
+
+def test_insights_themes_role_matrix(client: TestClient):
+    """
+    Verifies RBAC for GET /api/insights/themes:
+    - Lead (USR-104) -> 200
+    - EscalationManager (USR-103) -> 200
+    - Agent (USR-101) -> 403
+    - Requester (USR-201) -> 403
+    - Unauthenticated -> 401
+    """
+    assert client.get("/api/insights/themes", headers={"X-User-Id": "USR-104"}).status_code == 200
+    assert client.get("/api/insights/themes", headers={"X-User-Id": "USR-103"}).status_code == 200
+    assert client.get("/api/insights/themes", headers={"X-User-Id": "USR-101"}).status_code == 403
+    assert client.get("/api/insights/themes", headers={"X-User-Id": "USR-201"}).status_code == 403
+    assert client.get("/api/insights/themes").status_code == 401
+
+
+def test_insights_themes_percentage_and_samples(client: TestClient):
+    """
+    Verifies that GET /api/insights/themes:
+    - Sum of theme percentages is approximately 100% (within rounding)
+    - Returns sample ticket IDs (up to 3) for each theme
+    """
+    res = client.get("/api/insights/themes?days=30", headers={"X-User-Id": "USR-104"})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total_tagged_records"] > 0
+    assert len(data["themes"]) > 0
+
+    total_pct = sum(t["percentage"] for t in data["themes"])
+    assert 98.0 <= total_pct <= 102.0, f"Expected percentage sum ~100%, got {total_pct}"
+
+    for t in data["themes"]:
+        assert len(t["sample_ticket_ids"]) <= 3
+        assert t["count"] > 0
+
+
+def test_export_tickets_csv_role_matrix(client: TestClient):
+    """
+    Verifies RBAC for GET /api/export/tickets.csv:
+    - Lead (USR-104) -> 200
+    - EscalationManager (USR-103) -> 403
+    - Agent (USR-101) -> 403
+    - Requester (USR-201) -> 403
+    - Missing auth -> 401
+    """
+    assert client.get("/api/export/tickets.csv", headers={"X-User-Id": "USR-104"}).status_code == 200
+    assert client.get("/api/export/tickets.csv", headers={"X-User-Id": "USR-103"}).status_code == 403
+    assert client.get("/api/export/tickets.csv", headers={"X-User-Id": "USR-101"}).status_code == 403
+    assert client.get("/api/export/tickets.csv", headers={"X-User-Id": "USR-201"}).status_code == 403
+    assert client.get("/api/export/tickets.csv").status_code == 401
+
+
+def test_export_tickets_csv_streaming_and_row_count(client: TestClient, db_session: Session):
+    """
+    Verifies uncapped CSV streaming export:
+    - Header contains expected columns
+    - Row count in CSV exactly equals total tickets count in DB
+    - Bypasses artificial 3,000 row limits (5,000 total rows)
+    """
+    res = client.get("/api/export/tickets.csv", headers={"X-User-Id": "USR-104"})
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("text/csv")
+    assert "attachment; filename=opsdesk_tickets_export.csv" in res.headers["content-disposition"]
+
+    lines = [line for line in res.text.strip().split("\r\n") if line]
+    # Header line
+    assert lines[0] == "id,tboh_id,agency_id,title,intent,priority,status,check_in_date,lcd_date,assigned_to,created_at"
+
+    db_total = db_session.query(Ticket).count()
+    data_rows = len(lines) - 1
+    assert data_rows == db_total, f"Exported {data_rows} rows != DB count {db_total}"
+    assert data_rows >= 5000, f"Expected at least 5000 rows without cap, got {data_rows}"
+
+
+
 
