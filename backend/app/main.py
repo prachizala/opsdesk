@@ -125,49 +125,99 @@ def list_tickets(
             else:
                 query = query.order_by(Ticket.intent, Ticket.created_at.desc())
         elif view == "triage":
-            # Active queue sorted by priority/urgency
-            query = query.filter(Ticket.status.in_(["New", "Open", "Pending", "Escalated"]))
-
-    total_count = query.count()
-    tickets = query.offset(offset).limit(limit).all()
+            # Active queue: strictly unassigned active tickets
+            query = query.filter(
+                Ticket.status.in_(["New", "Open", "Pending", "Escalated"]),
+                Ticket.assigned_to.is_(None)
+            )
 
     now = datetime.utcnow()
-    results = []
-    for t in tickets:
-        sla = evaluate_travel_sla(
-            status=t.status,
-            check_in_date=t.check_in_date,
-            lcd_date=t.lcd_date,
-            priority=t.priority,
-            now=now
-        )
-        queue_score = calculate_queue_score_tier2(
-            priority=t.priority,
-            check_in_date=t.check_in_date,
-            now=now
-        )
-        results.append({
-            "id": t.id,
-            "tboh_id": t.tboh_id,
-            "agency_id": t.agency_id,
-            "title": t.title,
-            "intent": t.intent,
-            "priority": t.priority,
-            "status": t.status,
-            "check_in_date": t.check_in_date.isoformat(),
-            "lcd_date": t.lcd_date.isoformat(),
-            "assigned_to": t.assigned_to,
-            "routing_reason": t.routing_reason,
-            "sla": sla,
-            "queue_score": queue_score,
-            "created_at": t.created_at.isoformat()
-        })
 
-    # In triage view, sort results in memory by queue score descending
-    if view == "triage":
-        results.sort(key=lambda x: x["queue_score"], reverse=True)
+    # Note: At demo scale (5,000 records), computing SLA and queue_score across filtered candidate tickets in Python
+    # and sorting globally prior to offset/limit slicing provides exact queue prioritization without requiring database-specific
+    # procedural extensions. For production scale (millions of records), queue_score is maintained via indexed column or Rust/Go scoring sidecar.
+    if view in ["triage", "my_queue"]:
+        all_candidates = query.all()
+        total_count = len(all_candidates)
 
-    return {"total": total_count, "tickets": results}
+        scored_tickets = []
+        for t in all_candidates:
+            sla = evaluate_travel_sla(
+                status=t.status,
+                check_in_date=t.check_in_date,
+                lcd_date=t.lcd_date,
+                priority=t.priority,
+                now=now
+            )
+            queue_score = calculate_queue_score_tier2(
+                priority=t.priority,
+                check_in_date=t.check_in_date,
+                now=now
+            )
+            scored_tickets.append((queue_score, sla, t))
+
+        # Global sort by queue_score descending, tie-breaking by created_at
+        scored_tickets.sort(key=lambda x: (x[0], -x[2].created_at.timestamp() if x[2].created_at else 0), reverse=True)
+
+        paginated_slice = scored_tickets[offset : offset + limit]
+
+        results = []
+        for queue_score, sla, t in paginated_slice:
+            results.append({
+                "id": t.id,
+                "tboh_id": t.tboh_id,
+                "agency_id": t.agency_id,
+                "title": t.title,
+                "intent": t.intent,
+                "priority": t.priority,
+                "status": t.status,
+                "check_in_date": t.check_in_date.isoformat(),
+                "lcd_date": t.lcd_date.isoformat(),
+                "assigned_to": t.assigned_to if current_user.role != "Requester" else None,
+                "routing_reason": t.routing_reason if current_user.role != "Requester" else None,
+                "sla": sla,
+                "queue_score": queue_score if current_user.role != "Requester" else None,
+                "created_at": t.created_at.isoformat()
+            })
+
+        return {"total": total_count, "tickets": results}
+
+    else:
+        total_count = query.count()
+        tickets = query.offset(offset).limit(limit).all()
+
+        results = []
+        for t in tickets:
+            sla = evaluate_travel_sla(
+                status=t.status,
+                check_in_date=t.check_in_date,
+                lcd_date=t.lcd_date,
+                priority=t.priority,
+                now=now
+            )
+            queue_score = calculate_queue_score_tier2(
+                priority=t.priority,
+                check_in_date=t.check_in_date,
+                now=now
+            )
+            results.append({
+                "id": t.id,
+                "tboh_id": t.tboh_id,
+                "agency_id": t.agency_id,
+                "title": t.title,
+                "intent": t.intent,
+                "priority": t.priority,
+                "status": t.status,
+                "check_in_date": t.check_in_date.isoformat(),
+                "lcd_date": t.lcd_date.isoformat(),
+                "assigned_to": t.assigned_to if current_user.role != "Requester" else None,
+                "routing_reason": t.routing_reason if current_user.role != "Requester" else None,
+                "sla": sla,
+                "queue_score": queue_score if current_user.role != "Requester" else None,
+                "created_at": t.created_at.isoformat()
+            })
+
+        return {"total": total_count, "tickets": results}
 
 
 @app.post("/api/tickets", status_code=status.HTTP_201_CREATED)
@@ -188,7 +238,12 @@ def create_ticket(
     if current_user.role == "Requester":
         resolved_agency_id = current_user.agency_id
     else:
-        resolved_agency_id = payload.agency_id or "AGY-001"
+        if not payload.agency_id:
+            raise HTTPException(
+                status_code=400,
+                detail="agency_id is required for internal staff when creating a ticket"
+            )
+        resolved_agency_id = payload.agency_id
 
     agency = db.query(Agency).filter(Agency.id == resolved_agency_id).first()
     if not agency:
@@ -347,14 +402,19 @@ def get_ticket_details(
                 } for m in sc.messages]
             })
 
-    # Linked tickets
+    # Linked tickets (filtered to requester's agency for Requesters)
     linked_tickets = []
     links = db.query(TicketLink).filter(
         (TicketLink.ticket_id == ticket_id) | (TicketLink.linked_ticket_id == ticket_id)
     ).all()
     for l in links:
         other_id = l.linked_ticket_id if l.ticket_id == ticket_id else l.ticket_id
-        linked_tickets.append(other_id)
+        if current_user.role == "Requester":
+            other_ticket = db.query(Ticket.agency_id).filter(Ticket.id == other_id).first()
+            if other_ticket and other_ticket.agency_id == current_user.agency_id:
+                linked_tickets.append(other_id)
+        else:
+            linked_tickets.append(other_id)
 
     now = datetime.utcnow()
     sla = evaluate_travel_sla(
@@ -381,10 +441,10 @@ def get_ticket_details(
         "status": ticket.status,
         "check_in_date": ticket.check_in_date.isoformat(),
         "lcd_date": ticket.lcd_date.isoformat(),
-        "assigned_to": ticket.assigned_to,
-        "routing_reason": ticket.routing_reason,
+        "assigned_to": ticket.assigned_to if current_user.role != "Requester" else None,
+        "routing_reason": ticket.routing_reason if current_user.role != "Requester" else None,
         "sla": sla,
-        "queue_score": queue_score,
+        "queue_score": queue_score if current_user.role != "Requester" else None,
         "linked_ticket_ids": linked_tickets,
         "messages": messages,
         "side_conversations": side_threads,
@@ -566,7 +626,7 @@ def escalate_ticket(
 
     ticket.status = "Escalated"
     ticket.assigned_to = DEFAULT_ESCALATION_MANAGER_ID
-    ticket.routing_reason = f"Escalated to {DEFAULT_ESCALATION_MANAGER_ID}: {payload.reason}"
+    ticket.routing_reason = f"Escalated to Escalation Manager ({DEFAULT_ESCALATION_MANAGER_ID})"
     ticket.updated_at = datetime.utcnow()
 
     # Public event payload omits free-text reason to protect internal operational discussions
@@ -627,7 +687,7 @@ def transfer_ticket(
 
     old_agent = ticket.assigned_to
     ticket.assigned_to = payload.target_agent_id
-    ticket.routing_reason = f"Transferred from {old_agent} to {payload.target_agent_id}: {payload.reason}"
+    ticket.routing_reason = f"Transferred from {old_agent} to {payload.target_agent_id}"
     ticket.updated_at = datetime.utcnow()
 
     # Verify side conversations are preserved
