@@ -24,6 +24,10 @@ Designed specifically for travel consolidators, online travel agencies (OTAs), a
   - **Tier 2 (Continuous Scoring):** Continuous multi-factor dynamic scoring factoring base priority, deadline urgency, and agency tier multipliers.
 - **Transfer-Proof Supplier Threads:** Decouples supplier conversation recipients from internal ticket assignees, guaranteeing that external communications remain preserved across agent transfers.
 - **Uncapped Ops Data Path:** Eliminates artificial 3,000-row export barriers via direct SQL database cursor streaming (`yield_per(500)`). Benchmarked at **5,000 rows in ~1.32s**.
+- **Global TBOH & Ticket Search:** Instant search by `TBOH_ID`, Ticket ID, or keywords combined with Priority and Status multi-attribute filtering.
+- **Quick Action Command Palette (`Ctrl+K`):** Global operational keyboard shortcuts for immediate case jumping, role switching, and filtering.
+- **Modern In-App Toast System:** Lightweight, non-blocking notification engine replacing browser `alert()` modals.
+- **Operations Terminal CLI:** Interactive developer and ops terminal inspector (`scripts/opsdesk_cli.py`) for live triage and case 360 diagnostics.
 - **Modern Next.js 15 Frontend:** SaaS light theme operations console featuring a real-time Queue, Thread Viewer, Role Switcher with demo auth warning, AI Intent Auto-Suggest, and Operational Insights.
 
 ---
@@ -129,6 +133,29 @@ opsdesk/
 ├── SECURITY.md               # Security policy & vulnerability reporting
 ├── requirements.txt          # Python dependencies
 └── README.md                 # System overview and quickstart
+```
+
+---
+
+## 🛠️ Developer Tooling & Operations CLI
+
+OpsDesk includes standard developer workflows and terminal tools:
+
+```bash
+# Terminal Operations Queue Inspector
+python scripts/opsdesk_cli.py queue --limit 10
+
+# Inspect Case 360 Details, Booking Linkage, and Supplier Side-Threads
+python scripts/opsdesk_cli.py inspect TCK-1001
+
+# Inspect Top Root Cause Themes
+python scripts/opsdesk_cli.py themes --days 7
+
+# Run using Makefile
+make install        # Install requirements for Python and Node.js
+make dev-backend    # Start FastAPI on port 8000
+make dev-frontend   # Start Next.js on port 3000
+make test           # Run pytest suite
 ```
 
 ---
