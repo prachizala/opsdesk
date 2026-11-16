@@ -6,13 +6,10 @@ import { useUser } from "@/context/UserContext";
 import { DEMO_USERS } from "@/lib/types";
 import {
   Search,
-  Command,
   Flame,
   BarChart3,
   Inbox,
   UserCheck,
-  PlusCircle,
-  Download,
   X,
   ArrowRight,
 } from "lucide-react";
@@ -21,7 +18,7 @@ export function CommandPalette() {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const router = useRouter();
-  const { currentUser, setCurrentUser, isLead } = useUser();
+  const { currentUser, setCurrentUser } = useUser();
 
   // Toggle on Ctrl+K, Cmd+K, or slash when not typing in an input
   useEffect(() => {
