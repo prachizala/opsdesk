@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SLAAndQueueScoringContract",
+  "description": "Functional input/output contract for Travel SLA evaluations and Queue Priority Scoring",
+  "definitions": {
+    "SLAEvaluationInput": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["New", "Open", "Pending", "Escalated", "Resolved", "Closed"]
+        },
+        "check_in_date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lcd_date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["Low", "Medium", "High", "Urgent"]
+        },
+        "now": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["status", "check_in_date", "lcd_date", "priority", "now"]
+    },
+    "SLAEvaluationOutput": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["STOPPED", "BREACHED", "AT_RISK", "NORMAL"]
+        },
+        "color": {
+          "type": "string",
+          "enum": ["Gray", "Red", "Amber", "Green"]
+        },
+        "badge": {
+          "type": "string"
+        },
+        "hours_remaining": {
+          "type": ["number", "null"]
+        }
+      },
+      "required": ["status", "color", "badge"]
+    },
+    "QueueScoreInput": {
+      "type": "object",
+      "properties": {
+        "priority": {
+          "type": "string",
+          "enum": ["Low", "Medium", "High", "Urgent"]
+        },
+        "check_in_date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "now": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["priority", "check_in_date", "now"]
+    },
+    "QueueScoreOutput": {
+      "type": "object",
+      "properties": {
+        "score": {
+          "type": "number"
+        }
+      },
+      "required": ["score"]
+    }
+  }
+}

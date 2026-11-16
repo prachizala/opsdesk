@@ -55,6 +55,23 @@ class Ticket(Base):
     themes = relationship("TicketTheme", back_populates="ticket", cascade="all, delete-orphan")
     side_conversations = relationship("SideConversation", back_populates="ticket", cascade="all, delete-orphan")
     audit_logs = relationship("AuditLog", back_populates="ticket", cascade="all, delete-orphan")
+    outbox_events = relationship("EventOutbox", back_populates="ticket", cascade="all, delete-orphan")
+
+
+class EventOutbox(Base):
+    __tablename__ = "events_outbox"
+
+    id = Column(String(50), primary_key=True)
+    event_type = Column(String(100), nullable=False, index=True)
+    ticket_id = Column(String(50), ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False, index=True)
+    agency_id = Column(String(50), ForeignKey("agencies.id", ondelete="CASCADE"), nullable=False, index=True)
+    visibility = Column(String(20), nullable=False)  # 'public' or 'internal'
+    payload_json = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    delivered_at = Column(DateTime, nullable=True)
+
+    ticket = relationship("Ticket", back_populates="outbox_events")
+    agency = relationship("Agency")
 
 
 class TicketLink(Base):

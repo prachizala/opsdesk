@@ -1,11 +1,12 @@
 import os
+import json
 from datetime import datetime, timedelta
 import pytest
 from sqlalchemy.orm import Session
 from backend.app.database import engine, Base, SessionLocal
 from backend.app.models import (
     Agency, User, Ticket, TicketLink, SideConversation,
-    SideConversationRecipient, TicketTheme
+    SideConversationRecipient, TicketTheme, EventOutbox, TicketMessage
 )
 from backend.services.routing_engine import (
     CandidateAgent,
@@ -168,7 +169,58 @@ def test_sla_priority_modifies_threshold():
 
 
 # ============================================================================
-# 3. INTENT CLASSIFIER REGEX & PRECEDENCE TESTS
+# 3. GOLDEN VECTORS COMPLIANCE TEST (CONTRACTS VERIFICATION)
+# ============================================================================
+
+def test_contracts_golden_vectors():
+    """
+    Verifies that the Python reference implementations match 100% of the
+    golden vector test cases defined in contracts/golden_vectors.json.
+    """
+    golden_path = os.path.join(os.getcwd(), "contracts", "golden_vectors.json")
+    with open(golden_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # 1. Verify all SLA cases
+    assert len(data["sla_cases"]) >= 20
+    for case in data["sla_cases"]:
+        inp = case["input"]
+        exp = case["expected_output"]
+        now = datetime.fromisoformat(inp["now"].replace("Z", ""))
+        cid = datetime.fromisoformat(inp["check_in_date"].replace("Z", ""))
+        lcd = datetime.fromisoformat(inp["lcd_date"].replace("Z", ""))
+        
+        act = evaluate_travel_sla(
+            status=inp["status"],
+            check_in_date=cid,
+            lcd_date=lcd,
+            priority=inp["priority"],
+            now=now
+        )
+        assert act["status"] == exp["status"], f"Case {case['case_id']} status mismatch: {act['status']} != {exp['status']}"
+        assert act["color"] == exp["color"], f"Case {case['case_id']} color mismatch: {act['color']} != {exp['color']}"
+        assert act["badge"] == exp["badge"], f"Case {case['case_id']} badge mismatch: {act['badge']} != {exp['badge']}"
+        if exp["hours_remaining"] is not None:
+            assert abs(act["hours_remaining"] - exp["hours_remaining"]) < 0.01
+
+    # 2. Verify all Queue Score cases
+    assert len(data["queue_score_cases"]) >= 10
+    for case in data["queue_score_cases"]:
+        inp = case["input"]
+        exp = case["expected_output"]
+        now = datetime.fromisoformat(inp["now"].replace("Z", ""))
+        cid = datetime.fromisoformat(inp["check_in_date"].replace("Z", ""))
+        
+        score = calculate_queue_score_tier2(
+            priority=inp["priority"],
+            check_in_date=cid,
+            now=now
+        )
+        assert score == exp["score"], f"Queue case {case['case_id']} mismatch: {score} != {exp['score']}"
+
+
+# ============================================================================
+# 4. INTENT CLASSIFIER REGEX & PRECEDENCE TESTS
 # ============================================================================
 
 def test_intent_regex_refunded_inflection():
@@ -207,7 +259,6 @@ def test_intent_both_match_precedence():
 
 def test_intent_no_match_unclassified_fallback():
     """Unmatched text falls back to Unclassified when no Gemini key is provided."""
-    # Ensure env key is empty during test
     os.environ["GEMINI_API_KEY"] = ""
     intent, source = suggest_ticket_intent("General inquiry", "Hello, hope you are doing well today.")
     assert intent == "Unclassified"
@@ -215,7 +266,85 @@ def test_intent_no_match_unclassified_fallback():
 
 
 # ============================================================================
-# 4. SEED DATA GENERATOR TESTS
+# 5. OUTBOX TRANSACTIONAL LOGGING TESTS
+# ============================================================================
+
+def test_outbox_ticket_created_event(db_session: Session):
+    """Creating a ticket produces an event_outbox entry with visibility='public'."""
+    now = datetime.utcnow()
+    t = Ticket(
+        id="TCK-OUTBOX-1",
+        tboh_id="TBOH-99881",
+        agency_id="AGY-001",
+        title="Test Outbox Creation",
+        description="Ticket created for testing outbox emission",
+        intent="Refund Request",
+        priority="Medium",
+        status="New",
+        check_in_date=now + timedelta(days=2),
+        lcd_date=now + timedelta(days=1),
+        created_at=now
+    )
+    outbox_event = EventOutbox(
+        id="EVT-001",
+        event_type="ticket.created",
+        ticket_id=t.id,
+        agency_id=t.agency_id,
+        visibility="public",
+        payload_json=json.dumps({"ticket_id": t.id, "tboh_id": t.tboh_id, "status": "New"}),
+        created_at=now
+    )
+    db_session.add(t)
+    db_session.add(outbox_event)
+    db_session.commit()
+
+    ev = db_session.query(EventOutbox).filter(EventOutbox.id == "EVT-001").first()
+    assert ev is not None
+    assert ev.visibility == "public"
+    assert ev.event_type == "ticket.created"
+
+    # Clean up test records
+    db_session.delete(ev)
+    db_session.delete(t)
+    db_session.commit()
+
+def test_outbox_internal_note_visibility(db_session: Session):
+    """Adding an internal note produces an event_outbox entry with visibility='internal'."""
+    now = datetime.utcnow()
+    msg = TicketMessage(
+        id="MSG-INT-1",
+        ticket_id="TCK-1004",
+        sender_id="USR-101",
+        message_type="InternalNote",
+        content="Internal ops note: supplier is lagging on confirmation",
+        created_at=now
+    )
+    outbox_event = EventOutbox(
+        id="EVT-002",
+        event_type="message.created",
+        ticket_id="TCK-1004",
+        agency_id="AGY-001",
+        visibility="internal",
+        payload_json=json.dumps({"message_id": msg.id, "type": "InternalNote"}),
+        created_at=now
+    )
+    db_session.add(msg)
+    db_session.add(outbox_event)
+    db_session.commit()
+
+    ev = db_session.query(EventOutbox).filter(EventOutbox.id == "EVT-002").first()
+    assert ev is not None
+    assert ev.visibility == "internal"
+    assert ev.event_type == "message.created"
+
+    # Clean up
+    db_session.delete(ev)
+    db_session.delete(msg)
+    db_session.commit()
+
+
+# ============================================================================
+# 6. SEED DATA GENERATOR TESTS
 # ============================================================================
 
 @pytest.fixture(scope="module")

@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OpsDeskOutboxEvent",
+  "description": "Schema for transactional outbox events emitted by FastAPI and consumed by the Realtime Gateway",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "ticket.created",
+        "ticket.updated",
+        "ticket.assigned",
+        "ticket.unassigned",
+        "ticket.escalated",
+        "ticket.status_changed",
+        "message.created",
+        "side_conversation.created",
+        "side_conversation.message_created"
+      ]
+    },
+    "ticket_id": {
+      "type": "string"
+    },
+    "agency_id": {
+      "type": "string"
+    },
+    "visibility": {
+      "type": "string",
+      "enum": ["public", "internal"]
+    },
+    "payload_json": {
+      "type": "string",
+      "description": "JSON-encoded event details"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "delivered_at": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    }
+  },
+  "required": ["id", "event_type", "ticket_id", "agency_id", "visibility", "payload_json", "created_at"]
+}

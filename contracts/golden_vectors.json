@@ -1,0 +1,560 @@
+{
+  "version": "1.0.0",
+  "reference_timestamp": "2026-11-16T12:00:00Z",
+  "sla_cases": [
+    {
+      "case_id": "SLA-STOPPED-Closed-Urgent",
+      "description": "Closed ticket freezes timer regardless of past dates",
+      "input": {
+        "status": "Closed",
+        "check_in_date": "2026-11-14T12:00:00Z",
+        "lcd_date": "2026-11-13T12:00:00Z",
+        "priority": "Urgent",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "STOPPED",
+        "color": "Gray",
+        "badge": "SLA Stopped (Closed)",
+        "hours_remaining": null
+      }
+    },
+    {
+      "case_id": "SLA-STOPPED-Closed-Medium",
+      "description": "Closed ticket freezes timer regardless of past dates",
+      "input": {
+        "status": "Closed",
+        "check_in_date": "2026-11-14T12:00:00Z",
+        "lcd_date": "2026-11-13T12:00:00Z",
+        "priority": "Medium",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "STOPPED",
+        "color": "Gray",
+        "badge": "SLA Stopped (Closed)",
+        "hours_remaining": null
+      }
+    },
+    {
+      "case_id": "SLA-STOPPED-Resolved-Urgent",
+      "description": "Resolved ticket freezes timer regardless of past dates",
+      "input": {
+        "status": "Resolved",
+        "check_in_date": "2026-11-14T12:00:00Z",
+        "lcd_date": "2026-11-13T12:00:00Z",
+        "priority": "Urgent",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "STOPPED",
+        "color": "Gray",
+        "badge": "SLA Stopped (Resolved)",
+        "hours_remaining": null
+      }
+    },
+    {
+      "case_id": "SLA-STOPPED-Resolved-Medium",
+      "description": "Resolved ticket freezes timer regardless of past dates",
+      "input": {
+        "status": "Resolved",
+        "check_in_date": "2026-11-14T12:00:00Z",
+        "lcd_date": "2026-11-13T12:00:00Z",
+        "priority": "Medium",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "STOPPED",
+        "color": "Gray",
+        "badge": "SLA Stopped (Resolved)",
+        "hours_remaining": null
+      }
+    },
+    {
+      "case_id": "SLA-BREACHED-offset--5.0",
+      "description": "Active ticket with effective hours -5.0 is breached",
+      "input": {
+        "status": "Open",
+        "check_in_date": "2026-11-16T07:00:00Z",
+        "lcd_date": "2026-11-16T06:00:00Z",
+        "priority": "High",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "BREACHED",
+        "color": "Red",
+        "badge": "SLA Breached (6.0h ago)",
+        "hours_remaining": -6.0
+      }
+    },
+    {
+      "case_id": "SLA-BREACHED-offset--1.0",
+      "description": "Active ticket with effective hours -1.0 is breached",
+      "input": {
+        "status": "Open",
+        "check_in_date": "2026-11-16T11:00:00Z",
+        "lcd_date": "2026-11-16T10:00:00Z",
+        "priority": "High",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "BREACHED",
+        "color": "Red",
+        "badge": "SLA Breached (2.0h ago)",
+        "hours_remaining": -2.0
+      }
+    },
+    {
+      "case_id": "SLA-BREACHED-offset--0.1",
+      "description": "Active ticket with effective hours -0.1 is breached",
+      "input": {
+        "status": "Open",
+        "check_in_date": "2026-11-16T11:54:00Z",
+        "lcd_date": "2026-11-16T10:54:00Z",
+        "priority": "High",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "BREACHED",
+        "color": "Red",
+        "badge": "SLA Breached (1.1h ago)",
+        "hours_remaining": -1.1
+      }
+    },
+    {
+      "case_id": "SLA-BREACHED-offset-0.0",
+      "description": "Active ticket with effective hours 0.0 is breached",
+      "input": {
+        "status": "Open",
+        "check_in_date": "2026-11-16T12:00:00Z",
+        "lcd_date": "2026-11-16T11:00:00Z",
+        "priority": "High",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "BREACHED",
+        "color": "Red",
+        "badge": "SLA Breached (1.0h ago)",
+        "hours_remaining": -1.0
+      }
+    },
+    {
+      "case_id": "SLA-AT_RISK-Urgent-0.5",
+      "description": "Urgent ticket with 0.5h is AT_RISK (limit 6.0h)",
+      "input": {
+        "status": "Open",
+        "check_in_date": "2026-11-16T12:30:00Z",
+        "lcd_date": "2026-11-16T14:30:00Z",
+        "priority": "Urgent",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "AT_RISK",
+        "color": "Amber",
+        "badge": "At-Risk (0.5h to deadline)",
+        "hours_remaining": 0.5
+      }
+    },
+    {
+      "case_id": "SLA-AT_RISK-Urgent-3.0",
+      "description": "Urgent ticket with 3.0h is AT_RISK (limit 6.0h)",
+      "input": {
+        "status": "Open",
+        "check_in_date": "2026-11-16T15:00:00Z",
+        "lcd_date": "2026-11-16T17:00:00Z",
+        "priority": "Urgent",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "AT_RISK",
+        "color": "Amber",
+        "badge": "At-Risk (3.0h to deadline)",
+        "hours_remaining": 3.0
+      }
+    },
+    {
+      "case_id": "SLA-AT_RISK-Urgent-5.9",
+      "description": "Urgent ticket with 5.9h is AT_RISK (limit 6.0h)",
+      "input": {
+        "status": "Open",
+        "check_in_date": "2026-11-16T17:54:00Z",
+        "lcd_date": "2026-11-16T19:54:00Z",
+        "priority": "Urgent",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "AT_RISK",
+        "color": "Amber",
+        "badge": "At-Risk (5.9h to deadline)",
+        "hours_remaining": 5.9
+      }
+    },
+    {
+      "case_id": "SLA-AT_RISK-Urgent-6.0",
+      "description": "Urgent ticket with 6.0h is AT_RISK (limit 6.0h)",
+      "input": {
+        "status": "Open",
+        "check_in_date": "2026-11-16T18:00:00Z",
+        "lcd_date": "2026-11-16T20:00:00Z",
+        "priority": "Urgent",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "AT_RISK",
+        "color": "Amber",
+        "badge": "At-Risk (6.0h to deadline)",
+        "hours_remaining": 6.0
+      }
+    },
+    {
+      "case_id": "SLA-AT_RISK-High-1.0",
+      "description": "High ticket with 1.0h is AT_RISK (limit 4.0h)",
+      "input": {
+        "status": "Pending",
+        "check_in_date": "2026-11-16T13:00:00Z",
+        "lcd_date": "2026-11-16T14:00:00Z",
+        "priority": "High",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "AT_RISK",
+        "color": "Amber",
+        "badge": "At-Risk (1.0h to deadline)",
+        "hours_remaining": 1.0
+      }
+    },
+    {
+      "case_id": "SLA-AT_RISK-High-3.9",
+      "description": "High ticket with 3.9h is AT_RISK (limit 4.0h)",
+      "input": {
+        "status": "Pending",
+        "check_in_date": "2026-11-16T15:54:00Z",
+        "lcd_date": "2026-11-16T16:54:00Z",
+        "priority": "High",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "AT_RISK",
+        "color": "Amber",
+        "badge": "At-Risk (3.9h to deadline)",
+        "hours_remaining": 3.9
+      }
+    },
+    {
+      "case_id": "SLA-AT_RISK-High-4.0",
+      "description": "High ticket with 4.0h is AT_RISK (limit 4.0h)",
+      "input": {
+        "status": "Pending",
+        "check_in_date": "2026-11-16T16:00:00Z",
+        "lcd_date": "2026-11-16T17:00:00Z",
+        "priority": "High",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "AT_RISK",
+        "color": "Amber",
+        "badge": "At-Risk (4.0h to deadline)",
+        "hours_remaining": 4.0
+      }
+    },
+    {
+      "case_id": "SLA-AT_RISK-Medium-0.5",
+      "description": "Medium ticket with 0.5h is AT_RISK (limit 2.0h)",
+      "input": {
+        "status": "New",
+        "check_in_date": "2026-11-16T12:30:00Z",
+        "lcd_date": "2026-11-16T13:30:00Z",
+        "priority": "Medium",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "AT_RISK",
+        "color": "Amber",
+        "badge": "At-Risk (0.5h to deadline)",
+        "hours_remaining": 0.5
+      }
+    },
+    {
+      "case_id": "SLA-AT_RISK-Medium-1.9",
+      "description": "Medium ticket with 1.9h is AT_RISK (limit 2.0h)",
+      "input": {
+        "status": "New",
+        "check_in_date": "2026-11-16T13:54:00Z",
+        "lcd_date": "2026-11-16T14:54:00Z",
+        "priority": "Medium",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "AT_RISK",
+        "color": "Amber",
+        "badge": "At-Risk (1.9h to deadline)",
+        "hours_remaining": 1.9
+      }
+    },
+    {
+      "case_id": "SLA-AT_RISK-Medium-2.0",
+      "description": "Medium ticket with 2.0h is AT_RISK (limit 2.0h)",
+      "input": {
+        "status": "New",
+        "check_in_date": "2026-11-16T14:00:00Z",
+        "lcd_date": "2026-11-16T15:00:00Z",
+        "priority": "Medium",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "AT_RISK",
+        "color": "Amber",
+        "badge": "At-Risk (2.0h to deadline)",
+        "hours_remaining": 2.0
+      }
+    },
+    {
+      "case_id": "SLA-NORMAL-Urgent-6.1",
+      "description": "Urgent ticket with 6.1h is NORMAL",
+      "input": {
+        "status": "Open",
+        "check_in_date": "2026-11-16T18:06:00Z",
+        "lcd_date": "2026-11-16T20:06:00Z",
+        "priority": "Urgent",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "NORMAL",
+        "color": "Green",
+        "badge": "Normal (6.1h remaining)",
+        "hours_remaining": 6.1
+      }
+    },
+    {
+      "case_id": "SLA-NORMAL-Urgent-24.0",
+      "description": "Urgent ticket with 24.0h is NORMAL",
+      "input": {
+        "status": "Open",
+        "check_in_date": "2026-11-17T12:00:00Z",
+        "lcd_date": "2026-11-17T14:00:00Z",
+        "priority": "Urgent",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "NORMAL",
+        "color": "Green",
+        "badge": "Normal (24.0h remaining)",
+        "hours_remaining": 24.0
+      }
+    },
+    {
+      "case_id": "SLA-NORMAL-High-4.1",
+      "description": "High ticket with 4.1h is NORMAL",
+      "input": {
+        "status": "Open",
+        "check_in_date": "2026-11-16T16:06:00Z",
+        "lcd_date": "2026-11-16T18:06:00Z",
+        "priority": "High",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "NORMAL",
+        "color": "Green",
+        "badge": "Normal (4.1h remaining)",
+        "hours_remaining": 4.1
+      }
+    },
+    {
+      "case_id": "SLA-NORMAL-Medium-2.1",
+      "description": "Medium ticket with 2.1h is NORMAL",
+      "input": {
+        "status": "Open",
+        "check_in_date": "2026-11-16T14:06:00Z",
+        "lcd_date": "2026-11-16T16:06:00Z",
+        "priority": "Medium",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "NORMAL",
+        "color": "Green",
+        "badge": "Normal (2.1h remaining)",
+        "hours_remaining": 2.1
+      }
+    },
+    {
+      "case_id": "SLA-NORMAL-Low-48.0",
+      "description": "Low ticket with 48.0h is NORMAL",
+      "input": {
+        "status": "Open",
+        "check_in_date": "2026-11-18T12:00:00Z",
+        "lcd_date": "2026-11-18T14:00:00Z",
+        "priority": "Low",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "NORMAL",
+        "color": "Green",
+        "badge": "Normal (48.0h remaining)",
+        "hours_remaining": 48.0
+      }
+    },
+    {
+      "case_id": "SLA-LCD-CONTROLS-URGENCY",
+      "description": "Check-in is 5 days away but LCD is in 1h -> LCD controls urgency",
+      "input": {
+        "status": "Open",
+        "check_in_date": "2026-11-21T12:00:00Z",
+        "lcd_date": "2026-11-16T13:00:00Z",
+        "priority": "Medium",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "status": "AT_RISK",
+        "color": "Amber",
+        "badge": "At-Risk (1.0h to deadline)",
+        "hours_remaining": 1.0
+      }
+    }
+  ],
+  "queue_score_cases": [
+    {
+      "case_id": "QUEUE-Urgent-1.0h",
+      "description": "Urgent imminent <=2h (1000 + 2000 = 3000)",
+      "input": {
+        "priority": "Urgent",
+        "check_in_date": "2026-11-16T13:00:00Z",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "score": 3000.0
+      }
+    },
+    {
+      "case_id": "QUEUE-Urgent-2.0h",
+      "description": "Urgent boundary <=2h (1000 + 2000 = 3000)",
+      "input": {
+        "priority": "Urgent",
+        "check_in_date": "2026-11-16T14:00:00Z",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "score": 3000.0
+      }
+    },
+    {
+      "case_id": "QUEUE-Urgent-5.0h",
+      "description": "Urgent same-day <=6h (1000 + 800 = 1800)",
+      "input": {
+        "priority": "Urgent",
+        "check_in_date": "2026-11-16T17:00:00Z",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "score": 1800.0
+      }
+    },
+    {
+      "case_id": "QUEUE-Urgent-20.0h",
+      "description": "Urgent next-day <=24h (1000 + 300 = 1300)",
+      "input": {
+        "priority": "Urgent",
+        "check_in_date": "2026-11-17T08:00:00Z",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "score": 1300.0
+      }
+    },
+    {
+      "case_id": "QUEUE-Urgent-48.0h",
+      "description": "Urgent distant >24h (1000 + 0 = 1000)",
+      "input": {
+        "priority": "Urgent",
+        "check_in_date": "2026-11-18T12:00:00Z",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "score": 1000.0
+      }
+    },
+    {
+      "case_id": "QUEUE-High-1.5h",
+      "description": "High imminent <=2h (500 + 2000 = 2500)",
+      "input": {
+        "priority": "High",
+        "check_in_date": "2026-11-16T13:30:00Z",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "score": 2500.0
+      }
+    },
+    {
+      "case_id": "QUEUE-High-5.9h",
+      "description": "High same-day <=6h (500 + 800 = 1300)",
+      "input": {
+        "priority": "High",
+        "check_in_date": "2026-11-16T17:54:00Z",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "score": 1300.0
+      }
+    },
+    {
+      "case_id": "QUEUE-Medium-0.5h",
+      "description": "Medium imminent <=2h (200 + 2000 = 2200)",
+      "input": {
+        "priority": "Medium",
+        "check_in_date": "2026-11-16T12:30:00Z",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "score": 2200.0
+      }
+    },
+    {
+      "case_id": "QUEUE-Medium-12.0h",
+      "description": "Medium next-day <=24h (200 + 300 = 500)",
+      "input": {
+        "priority": "Medium",
+        "check_in_date": "2026-11-17T00:00:00Z",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "score": 500.0
+      }
+    },
+    {
+      "case_id": "QUEUE-Medium-72.0h",
+      "description": "Medium distant >24h (200 + 0 = 200)",
+      "input": {
+        "priority": "Medium",
+        "check_in_date": "2026-11-19T12:00:00Z",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "score": 200.0
+      }
+    },
+    {
+      "case_id": "QUEUE-Low-1.0h",
+      "description": "Low imminent <=2h (50 + 2000 = 2050)",
+      "input": {
+        "priority": "Low",
+        "check_in_date": "2026-11-16T13:00:00Z",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "score": 2050.0
+      }
+    },
+    {
+      "case_id": "QUEUE-Low-30.0h",
+      "description": "Low distant >24h (50 + 0 = 50)",
+      "input": {
+        "priority": "Low",
+        "check_in_date": "2026-11-17T18:00:00Z",
+        "now": "2026-11-16T12:00:00Z"
+      },
+      "expected_output": {
+        "score": 50.0
+      }
+    }
+  ]
+}
