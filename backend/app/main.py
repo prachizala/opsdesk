@@ -166,11 +166,12 @@ def list_tickets(
             else:
                 query = query.order_by(Ticket.intent, Ticket.created_at.desc())
         elif view == "triage":
-            # Active queue: strictly unassigned active tickets
-            query = query.filter(
-                Ticket.status.in_(["New", "Open", "Pending", "Escalated"]),
-                Ticket.assigned_to.is_(None)
-            )
+            # Active queue: strictly unassigned active tickets (unless an explicit search term is provided)
+            if not (search and search.strip()):
+                query = query.filter(
+                    Ticket.status.in_(["New", "Open", "Pending", "Escalated"]),
+                    Ticket.assigned_to.is_(None)
+                )
 
     now = datetime.utcnow()
 

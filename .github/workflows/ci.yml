@@ -31,8 +31,10 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run Pytest Suite
+        env:
+          PYTHONPATH: .
         run: |
-          pytest backend/tests -v
+          python -m pytest backend/tests -v
 
   frontend-build:
     name: Frontend Build & Typecheck
@@ -50,7 +52,7 @@ jobs:
 
       - name: Install Frontend Dependencies
         working-directory: frontend
-        run: npm ci
+        run: npm ci || npm install
 
       - name: Build Next.js Application
         working-directory: frontend
