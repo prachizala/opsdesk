@@ -29,11 +29,23 @@ export async function fetchTickets(
   limit: number = 20,
   offset: number = 0,
   userId: string = "USR-101",
-  intentFilter?: string
+  intentFilter?: string,
+  searchQuery?: string,
+  priorityFilter?: string,
+  statusFilter?: string
 ): Promise<TicketsListResponse> {
   let path = `/api/tickets?view=${encodeURIComponent(view)}&limit=${limit}&offset=${offset}`;
   if (intentFilter) {
     path += `&intent=${encodeURIComponent(intentFilter)}`;
+  }
+  if (searchQuery && searchQuery.trim()) {
+    path += `&search=${encodeURIComponent(searchQuery.trim())}`;
+  }
+  if (priorityFilter) {
+    path += `&priority=${encodeURIComponent(priorityFilter)}`;
+  }
+  if (statusFilter) {
+    path += `&status=${encodeURIComponent(statusFilter)}`;
   }
   return request<TicketsListResponse>(path, {}, userId);
 }

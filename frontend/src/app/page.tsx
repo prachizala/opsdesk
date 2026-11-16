@@ -16,6 +16,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
+  Search,
+  X,
 } from "lucide-react";
 
 export default function QueuePage() {
@@ -28,6 +30,9 @@ export default function QueuePage() {
   const [page, setPage] = useState<number>(0);
   const pageSize = 15;
   const [intentFilter, setIntentFilter] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [priorityFilter, setPriorityFilter] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
   const [isCreateOpen, setIsCreateOpen] = useState<boolean>(false);
 
   // Default tab for requester vs staff
@@ -50,7 +55,10 @@ export default function QueuePage() {
         pageSize,
         page * pageSize,
         currentUser.id,
-        intentFilter || undefined
+        intentFilter || undefined,
+        searchQuery || undefined,
+        priorityFilter || undefined,
+        statusFilter || undefined
       );
       setTickets(res.tickets || []);
       setTotalCount(res.total || 0);
@@ -59,7 +67,7 @@ export default function QueuePage() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, page, currentUser.id, isRequester, intentFilter]);
+  }, [activeTab, page, currentUser.id, isRequester, intentFilter, searchQuery, priorityFilter, statusFilter]);
 
   // Load on change and poll every 30s
   useEffect(() => {
@@ -223,6 +231,91 @@ export default function QueuePage() {
             </select>
           </div>
         )}
+      </div>
+
+      {/* Search & Multi-Attribute Filters Bar */}
+      <div className="bg-white border border-slate-200 rounded-lg p-3.5 mb-4 shadow-sm flex flex-col sm:flex-row items-center gap-3">
+        <div className="relative flex-1 w-full">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(0);
+            }}
+            placeholder="Search by TBOH ID (e.g. TBOH-1001), Ticket ID, or keywords..."
+            className="w-full pl-9 pr-8 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-md focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800 placeholder-slate-400"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => {
+                setSearchQuery("");
+                setPage(0);
+              }}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              title="Clear search"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 whitespace-nowrap">
+            <span className="font-medium text-slate-600">Priority:</span>
+            <select
+              value={priorityFilter}
+              onChange={(e) => {
+                setPriorityFilter(e.target.value);
+                setPage(0);
+              }}
+              aria-label="Filter by priority"
+              className="text-xs bg-white border border-slate-300 text-slate-700 rounded-md px-2 py-1 focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="">All Priorities</option>
+              <option value="Urgent">Urgent</option>
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+              <option value="Low">Low</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 whitespace-nowrap">
+            <span className="font-medium text-slate-600">Status:</span>
+            <select
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(0);
+              }}
+              aria-label="Filter by status"
+              className="text-xs bg-white border border-slate-300 text-slate-700 rounded-md px-2 py-1 focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="">All Statuses</option>
+              <option value="New">New</option>
+              <option value="Open">Open</option>
+              <option value="Pending">Pending</option>
+              <option value="Escalated">Escalated</option>
+              <option value="Resolved">Resolved</option>
+              <option value="Closed">Closed</option>
+            </select>
+          </div>
+
+          {(searchQuery || priorityFilter || statusFilter) && (
+            <button
+              onClick={() => {
+                setSearchQuery("");
+                setPriorityFilter("");
+                setStatusFilter("");
+                setPage(0);
+              }}
+              className="text-xs font-medium text-indigo-600 hover:text-indigo-800 whitespace-nowrap px-2 py-1 rounded bg-indigo-50 hover:bg-indigo-100 transition-colors"
+            >
+              Reset Filters
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Table Content */}

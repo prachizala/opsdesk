@@ -6,7 +6,7 @@ from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, or_
 
 from backend.app.database import get_db
 from backend.app.models import (
@@ -90,6 +90,9 @@ def api_suggest_intent(
 def list_tickets(
     view: str = Query("triage", description="View filter: triage, my_queue, by_region, by_intent, linked"),
     intent: Optional[str] = Query(None, description="Optional intent category filter"),
+    priority: Optional[str] = Query(None, description="Optional priority filter (Low, Medium, High, Urgent)"),
+    status: Optional[str] = Query(None, description="Optional status filter (New, Open, Pending, Escalated, Resolved, Closed)"),
+    search: Optional[str] = Query(None, description="Keyword search across tboh_id, id, title, and description"),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
@@ -101,6 +104,22 @@ def list_tickets(
     Returns the real total count matching query criteria prior to limit pagination.
     """
     query = db.query(Ticket)
+
+    # Apply global search and granular attribute filters
+    if priority:
+        query = query.filter(Ticket.priority == priority)
+    if status:
+        query = query.filter(Ticket.status == status)
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                Ticket.tboh_id.ilike(term),
+                Ticket.id.ilike(term),
+                Ticket.title.ilike(term),
+                Ticket.description.ilike(term)
+            )
+        )
 
     # Multi-tenant isolation: Requesters only ever see tickets belonging to their own agency
     if current_user.role == "Requester":
