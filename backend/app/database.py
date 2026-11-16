@@ -43,6 +43,24 @@ if is_sqlite:
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+def ensure_schema_migrations(engine_obj):
+    """
+    Lightweight schema migration ensuring new columns and tables exist on existing SQLite databases.
+    """
+    from sqlalchemy import text
+    from backend.app import models  # register all models on Base
+    models.Base.metadata.create_all(bind=engine_obj)
+    if is_sqlite:
+        try:
+            with engine_obj.connect() as conn:
+                res = conn.execute(text("PRAGMA table_info(tickets)")).fetchall()
+                cols = [r[1] for r in res]
+                if cols and "version" not in cols:
+                    conn.execute(text("ALTER TABLE tickets ADD COLUMN version INTEGER DEFAULT 1 NOT NULL"))
+                    conn.commit()
+        except Exception:
+            pass
+
 def get_db():
     db = SessionLocal()
     try:

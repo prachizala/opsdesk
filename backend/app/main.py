@@ -9,7 +9,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, defer
 from sqlalchemy import desc, func, text
 
-from backend.app.database import get_db
+from backend.app.database import get_db, ensure_schema_migrations, engine
+ensure_schema_migrations(engine)
 from backend.app.models import (
     User, Agency, Ticket, TicketLink, TicketMessage,
     SideConversation, SideConversationRecipient, SideConversationMessage,
