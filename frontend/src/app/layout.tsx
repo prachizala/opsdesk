@@ -3,6 +3,7 @@ import "./globals.css";
 import { UserProvider } from "@/context/UserContext";
 import { ToastProvider } from "@/context/ToastContext";
 import { TopNav } from "@/components/TopNav";
+import { Sidebar } from "@/components/Sidebar";
 import { CommandPalette } from "@/components/CommandPalette";
 
 export const metadata: Metadata = {
@@ -17,14 +18,17 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-canvas text-content-primary antialiased font-sans">
+      <body className="min-h-screen bg-canvas text-content-primary antialiased font-sans flex flex-col">
         <UserProvider>
           <ToastProvider>
             <TopNav />
             <CommandPalette />
-            <main className="max-w-[1440px] mx-auto px-6 py-6">
-              {children}
-            </main>
+            <div className="flex-1 flex w-full max-w-[1440px] mx-auto">
+              <Sidebar className="min-h-[calc(100vh-56px)] sticky top-14 self-start" />
+              <main className="flex-1 px-6 py-6 overflow-x-hidden min-w-0">
+                {children}
+              </main>
+            </div>
           </ToastProvider>
         </UserProvider>
       </body>
