@@ -294,10 +294,16 @@ def seed_database(db: Session, engine_bind=None, total_tickets: int = 5000, drop
     priorities = ["Low", "Medium", "High", "Urgent"]
 
     synthetic_count = total_tickets - len(fixture_tickets)
-    historical_count = 3500
-    escalated_count = 40
-    at_risk_synthetic_count = 78
-    normal_active_count = synthetic_count - historical_count - escalated_count - at_risk_synthetic_count
+    if total_tickets < 500:
+        historical_count = int(synthetic_count * 0.70)
+        escalated_count = max(1, int(synthetic_count * 0.01))
+        at_risk_synthetic_count = max(1, int(synthetic_count * 0.02))
+        normal_active_count = max(0, synthetic_count - historical_count - escalated_count - at_risk_synthetic_count)
+    else:
+        historical_count = 3500
+        escalated_count = 40
+        at_risk_synthetic_count = 78
+        normal_active_count = synthetic_count - historical_count - escalated_count - at_risk_synthetic_count
 
     categories = (
         ["historical"] * historical_count +

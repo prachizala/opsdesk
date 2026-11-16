@@ -41,6 +41,9 @@ def normalize_utc_datetime(v: Any) -> datetime:
         raise ValueError("Invalid datetime value")
     if dt.tzinfo is not None:
         dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    else:
+        # Naive datetime/string: treat as UTC directly, never call astimezone() which assumes host local timezone
+        dt = dt.replace(tzinfo=timezone.utc).replace(tzinfo=None)
     return dt
 
 class TicketCreateSchema(BaseModel):

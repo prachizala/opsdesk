@@ -971,6 +971,37 @@ def test_schema_datetime_normalization_unit():
     assert schema_z.check_in_date == schema_offset.check_in_date == schema_naive.check_in_date
 
 
+def test_normalize_utc_datetime_naive_and_tz_independent():
+    """
+    Verifies normalize_utc_datetime handles naive datetime objects/strings
+    treating them as UTC directly without calling astimezone(), remaining
+    completely independent of host local system timezone.
+    """
+    from backend.app.schemas import normalize_utc_datetime
+    
+    # 1. Naive string
+    dt_str = "2026-11-20T10:00:00"
+    res_str = normalize_utc_datetime(dt_str)
+    assert res_str == datetime(2026, 11, 20, 10, 0, 0)
+    assert res_str.tzinfo is None
+
+    # 2. Naive datetime object
+    naive_obj = datetime.fromisoformat("2026-11-20T10:00:00")
+    res_obj = normalize_utc_datetime(naive_obj)
+    assert res_obj == datetime(2026, 11, 20, 10, 0, 0)
+    assert res_obj.tzinfo is None
+
+    # 3. Z-terminated string
+    res_z = normalize_utc_datetime("2026-11-20T10:00:00Z")
+    assert res_z == datetime(2026, 11, 20, 10, 0, 0)
+    assert res_z.tzinfo is None
+
+    # 4. Offset string (+05:30) converts to UTC 10:00:00
+    res_offset = normalize_utc_datetime("2026-11-20T15:30:00+05:30")
+    assert res_offset == datetime(2026, 11, 20, 10, 0, 0)
+    assert res_offset.tzinfo is None
+
+
 def test_endpoint_ticket_create_with_z_datetime_201(client: TestClient):
     """
     Verifies that POST /api/tickets with '...Z' datetime succeeds with HTTP 201 (not 500).
