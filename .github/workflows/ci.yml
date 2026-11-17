@@ -65,7 +65,7 @@ jobs:
           npm audit --omit=dev --audit-level=high || echo "::warning::Non-blocking production dependency audit warnings detected"
 
   docker:
-    name: Container Build Verification
+    name: Container Build & Runtime Verification
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -73,3 +73,26 @@ jobs:
 
       - name: Build Docker compose services
         run: docker compose build
+
+      - name: Start Docker compose services
+        run: docker compose up -d
+
+      - name: Verify health and readiness endpoints
+        run: |
+          echo "Waiting for services to become healthy..."
+          for i in {1..30}; do
+            if curl -s http://localhost:8000/health | grep -q "healthy" && curl -s http://localhost:8000/ready | grep -q "ready"; then
+              echo "Services healthy and ready after ${i} attempts"
+              break
+            fi
+            echo "Attempt ${i}/30 failed, sleeping 2s..."
+            sleep 2
+          done
+          echo "Final check for /health:"
+          curl -f -v http://localhost:8000/health
+          echo "Final check for /ready:"
+          curl -f -v http://localhost:8000/ready
+
+      - name: Stop Docker compose services
+        if: always()
+        run: docker compose down
