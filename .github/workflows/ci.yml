@@ -2,9 +2,13 @@ name: OpsDesk Full-Stack CI
 
 on:
   push:
-    branches: ["**"]
+    branches: ["master", "main"]
   pull_request:
     branches: ["**"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   backend:
