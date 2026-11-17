@@ -1542,11 +1542,12 @@ def test_export_csv_formula_injection_escaping(client: TestClient, db_session: S
     assert sec_row[title_idx] == "'=1+1", f"Expected title to be escaped as ''=1+1', got {sec_row[title_idx]}"
 
 
-def test_sqlite_concurrent_writes_wal_prevents_database_is_locked():
+def test_sqlite_concurrent_writes_busy_timeout_prevents_database_is_locked():
     """
     CONCURRENCY TEST:
-    Verifies that SQLite WAL mode with busy_timeout=5000 eliminates
-    'database is locked' errors under multi-threaded concurrent write bursts.
+    Verifies that SQLite busy_timeout=5000 (with WAL or DELETE mode) eliminates
+    'database is locked' errors under multi-threaded concurrent write bursts,
+    whereas busy_timeout=0 experiences severe locking errors.
     """
     from concurrent.futures import ThreadPoolExecutor
 
