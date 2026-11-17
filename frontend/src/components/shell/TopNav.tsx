@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useUser } from "@/context/UserContext";
 import { DEMO_USERS } from "@/lib/types";
 import { Avatar } from "@/components/ui/Avatar";
@@ -34,6 +35,7 @@ export function LogoMark({ className = "w-6 h-6" }: { className?: string }) {
 }
 
 export function TopNav() {
+  const router = useRouter();
   const { currentUser, setCurrentUser } = useUser();
   const [isBannerDismissed, setIsBannerDismissed] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -43,6 +45,21 @@ export function TopNav() {
   });
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [globalSearch, setGlobalSearch] = useState<string>("");
+
+  // Keyboard shortcut: Ctrl+K / Cmd+K focuses global search bar
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // API unreachable monitoring state
   const [isApiDown, setIsApiDown] = useState<boolean>(false);
@@ -115,13 +132,6 @@ export function TopNav() {
     }
   };
 
-  // Dispatch custom keyboard event for Ctrl+K global search
-  const openCommandPalette = () => {
-    window.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true })
-    );
-  };
-
   return (
     <header className="sticky top-0 z-40 bg-surface border-b border-border shadow-xs">
       {/* 1. API Unreachable Error State Banner (persistent red-50 bar) */}
@@ -192,20 +202,34 @@ export function TopNav() {
 
         {/* Center: Global Search Bar (Ctrl+K Focus Trigger) */}
         <div className="flex-1 max-w-md mx-auto hidden sm:block">
-          <button
-            type="button"
-            onClick={openCommandPalette}
-            aria-label="Search cases and bookings (Ctrl+K)"
-            className="w-full h-9 flex items-center justify-between px-3 rounded-input bg-surface-subtle text-caption text-content-secondary border border-border hover:border-border-strong transition-subtle cursor-pointer select-none"
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (globalSearch.trim()) {
+                router.push(`/?search=${encodeURIComponent(globalSearch.trim())}`);
+              }
+            }}
+            className="relative flex items-center"
           >
-            <span className="flex items-center gap-2">
-              <Search className="w-4 h-4 text-content-tertiary" />
-              <span>Search tickets, bookings, tags...</span>
-            </span>
-            <kbd className="font-mono-numbers text-[10px] bg-surface text-content-tertiary px-1.5 py-0.5 rounded border border-border">
+            <Search className="w-4 h-4 text-content-tertiary absolute left-3 pointer-events-none" />
+            <input
+              ref={searchInputRef}
+              type="search"
+              value={globalSearch}
+              onChange={(e) => setGlobalSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  searchInputRef.current?.blur();
+                }
+              }}
+              placeholder="Search tickets, bookings, tags..."
+              aria-label="Search tickets and bookings (Ctrl+K)"
+              className="w-full h-9 pl-9 pr-16 rounded-input bg-surface-subtle text-caption text-content-primary placeholder:text-content-disabled border border-border hover:border-border-strong focus:border-brand-500 focus:bg-surface focus:outline-none transition-subtle"
+            />
+            <kbd className="absolute right-2.5 font-mono-numbers text-[10px] bg-surface text-content-tertiary px-1.5 py-0.5 rounded border border-border pointer-events-none select-none">
               Ctrl+K
             </kbd>
-          </button>
+          </form>
         </div>
 
         {/* Right: Role Switcher showing avatar, name, role, agency/region */}

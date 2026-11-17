@@ -154,6 +154,14 @@ export function QueueTable({
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     router.push(`/ticket/${t.id}`);
+                  } else if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    const nextRow = e.currentTarget.nextElementSibling as HTMLElement | null;
+                    if (nextRow) nextRow.focus();
+                  } else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    const prevRow = e.currentTarget.previousElementSibling as HTMLElement | null;
+                    if (prevRow) prevRow.focus();
                   }
                 }}
                 tabIndex={0}
