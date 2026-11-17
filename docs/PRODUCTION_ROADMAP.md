@@ -57,7 +57,7 @@ This roadmap outlines the engineering initiatives required to transition OpsDesk
 ## 5. Rate Limiting, Resiliency & Observability
 
 - **Current State (Milestone 4 Hardened):**
-  - Next.js upgraded to 15.5.29, eliminating CVE-2025-66478.
+  - Next.js upgraded to 15.5.29 (patched floor: >= 15.1.4 for CVE-2025-66478 / GHSA-9qr9-h5gf-34mp) and React/React-DOM upgraded to 19.0.1 (patched floor: >= 19.0.1).
   - CSV formula injection sanitization on all exported cells (prefixing `=`, `+`, `-`, `@`, `\t`, `\r` with `'`).
   - In-process sliding-window rate limiter middleware (`RATE_LIMIT_PER_MINUTE`, default 120 req/min) returning HTTP 429 + `Retry-After: 60`.
   - CSV export concurrency limiter (`CSV_EXPORT_MAX_CONCURRENCY`, default 2) returning HTTP 503 + `Retry-After: 10`.

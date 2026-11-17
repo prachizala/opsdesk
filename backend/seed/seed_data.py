@@ -8,7 +8,27 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
-from faker import Faker
+try:
+    from faker import Faker
+except ImportError:
+    class Faker:
+        def __init__(self):
+            pass
+        @classmethod
+        def seed(cls, val):
+            pass
+        def sentence(self, nb_words=6):
+            samples = [
+                "urgent operational assistance requested for pending voucher confirmation",
+                "supplier response delayed for hotel booking amendment",
+                "booking payment discrepancy requires immediate desk validation",
+                "traveler requested room preference upgrade before check-in",
+                "cancellation policy penalty review needed for corporate client"
+            ]
+            return random.choice(samples)
+        def paragraph(self, nb_sentences=3):
+            return "Customer contacted support regarding booking itinerary updates. Supplier response has been logged and forwarded to operations team. Priority handling initiated to prevent travel disruption."
+
 from sqlalchemy.orm import Session
 from backend.app.database import Base, SessionLocal
 from backend.app.models import (

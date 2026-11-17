@@ -1,37 +1,69 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import Link from "next/link";
 import { useUser } from "@/context/UserContext";
-import { fetchTickets, createTicket, suggestIntent } from "@/lib/api";
+import { useToast } from "@/context/ToastContext";
+import { fetchTickets, getExportUrl } from "@/lib/api";
 import { TicketSummary } from "@/lib/types";
-import { SLABadge, PriorityBadge, StatusBadge } from "@/components/Badge";
-import { calculateClientSla } from "@/lib/sla";
+import { EmptyState, ErrorState } from "@/components/ui";
 import {
-  RefreshCw,
-  PlusCircle,
-  Sparkles,
-  AlertCircle,
-  Inbox,
-  ArrowRight,
-  ChevronLeft,
-  ChevronRight,
-  Filter,
-} from "lucide-react";
+  QueueHeader,
+  QueueKpiStrip,
+  QueueTabs,
+  QueueFilterBar,
+  QueueTable,
+  QueueCardsView,
+  QueuePagination,
+  CreateTicketModal,
+  MobileFilterSheet,
+  MobileTicketCard,
+  DepartureBoardStrip,
+  QueuePreviewDrawer,
+} from "@/components/queue";
 
 export default function QueuePage() {
   const { currentUser, isStaff, isRequester } = useUser();
+  const { showToast } = useToast();
+
+  // Navigation & Data state
   const [activeTab, setActiveTab] = useState<string>("triage");
+  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   const [tickets, setTickets] = useState<TicketSummary[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState<number>(0);
-  const pageSize = 15;
+  const pageSize = 50;
+
+  // Filter state
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [debouncedSearch, setDebouncedSearch] = useState<string>("");
   const [intentFilter, setIntentFilter] = useState<string>("");
+  const [priorityFilter, setPriorityFilter] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [atRiskOnly, setAtRiskOnly] = useState<boolean>(false);
+  const [unassignedOnly, setUnassignedOnly] = useState<boolean>(false);
+  const [healthBarFilter, setHealthBarFilter] = useState<string>("ALL");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState<boolean>(false);
+
+  // Split-View Preview Drawer state
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
+
+  // Export & Modal state
+  const [isExporting, setIsExporting] = useState<boolean>(false);
   const [isCreateOpen, setIsCreateOpen] = useState<boolean>(false);
 
-  // Default tab for requester vs staff
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setPage(0);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Set default tab on role switch
   useEffect(() => {
     if (isRequester) {
       setActiveTab("my_agency");
@@ -41,20 +73,12 @@ export default function QueuePage() {
     setPage(0);
   }, [currentUser.id, isRequester]);
 
-  const [lastFetchedAt, setLastFetchedAt] = useState<number>(Date.now());
-  const [currentTime, setCurrentTime] = useState<number>(Date.now());
+  // Resilient polling refs & AbortController (M4 load hardening)
   const abortControllerRef = useRef<AbortController | null>(null);
   const backoffDelayRef = useRef<number>(5000);
   const timerIdRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Client-side 1s tick for updating countdowns
-  useEffect(() => {
-    const tickInterval = setInterval(() => {
-      setCurrentTime(Date.now());
-    }, 1000);
-    return () => clearInterval(tickInterval);
-  }, []);
-
+  // Load Queue Data with signal and background polling support
   const loadData = useCallback(async (isBackgroundPoll = false) => {
     if (!isBackgroundPoll) {
       setLoading(true);
@@ -66,19 +90,41 @@ export default function QueuePage() {
     abortControllerRef.current = controller;
 
     try {
-      const viewParam = isRequester ? (activeTab === "my_agency" ? "triage" : activeTab) : activeTab;
+      const viewParam = isRequester
+        ? activeTab === "my_agency"
+          ? "triage"
+          : activeTab
+        : activeTab;
+
       const res = await fetchTickets(
         viewParam,
         pageSize,
         page * pageSize,
         currentUser.id,
         intentFilter || undefined,
+        debouncedSearch || undefined,
+        priorityFilter || undefined,
+        statusFilter || undefined,
         controller.signal
       );
-      setTickets(res.tickets || []);
+
+      let fetchedTickets = res.tickets || [];
+
+      // Client-side At Risk / Breached filter toggle
+      if (atRiskOnly) {
+        fetchedTickets = fetchedTickets.filter(
+          (t) => t.sla.status === "AT_RISK" || t.sla.status === "BREACHED"
+        );
+      }
+
+      // Client-side Unassigned filter toggle
+      if (unassignedOnly) {
+        fetchedTickets = fetchedTickets.filter((t) => !t.assigned_to);
+      }
+
+      setTickets(fetchedTickets);
       setTotalCount(res.total || 0);
       setError(null);
-      setLastFetchedAt(Date.now());
       backoffDelayRef.current = 5000;
       return true;
     } catch (err: unknown) {
@@ -92,7 +138,19 @@ export default function QueuePage() {
         setLoading(false);
       }
     }
-  }, [activeTab, page, currentUser.id, isRequester, intentFilter, pageSize]);
+  }, [
+    activeTab,
+    page,
+    currentUser.id,
+    isRequester,
+    intentFilter,
+    debouncedSearch,
+    priorityFilter,
+    statusFilter,
+    atRiskOnly,
+    unassignedOnly,
+    pageSize,
+  ]);
 
   // Load on change and resilient poll with jitter, visibilitychange pause, and exponential backoff
   useEffect(() => {
@@ -130,465 +188,339 @@ export default function QueuePage() {
       }
     });
 
-    const handleVisibilityChange = () => {
-      if (typeof document !== "undefined" && document.hidden) {
-        if (timerIdRef.current) clearTimeout(timerIdRef.current);
-        if (abortControllerRef.current) abortControllerRef.current.abort();
-      } else {
+    const handleVisibility = () => {
+      if (typeof document !== "undefined" && !document.hidden) {
         loadData(true).then((success) => {
           if (!isCancelled) {
             scheduleNextPoll(!success);
           }
         });
+      } else {
+        if (timerIdRef.current) {
+          clearTimeout(timerIdRef.current);
+        }
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+        }
       }
     };
 
     if (typeof document !== "undefined") {
-      document.addEventListener("visibilitychange", handleVisibilityChange);
+      document.addEventListener("visibilitychange", handleVisibility);
     }
 
     return () => {
       isCancelled = true;
-      if (timerIdRef.current) clearTimeout(timerIdRef.current);
-      if (abortControllerRef.current) abortControllerRef.current.abort();
       if (typeof document !== "undefined") {
-        document.removeEventListener("visibilitychange", handleVisibilityChange);
+        document.removeEventListener("visibilitychange", handleVisibility);
+      }
+      if (timerIdRef.current) {
+        clearTimeout(timerIdRef.current);
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
     };
   }, [loadData]);
 
-  // Create Ticket Form State
-  const [createTitle, setCreateTitle] = useState("");
-  const [createDesc, setCreateDesc] = useState("");
-  const [createTboh, setCreateTboh] = useState("");
-  const [createPrio, setCreatePrio] = useState("Medium");
-  const [createCheckin, setCreateCheckin] = useState("");
-  const [createLcd, setCreateLcd] = useState("");
-  const [createIntent, setCreateIntent] = useState("");
-  const [createAgency, setCreateAgency] = useState("AGY-001");
-  const [suggestingIntent, setSuggestingIntent] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
+  // Clear filters
+  const hasActiveFilters =
+    Boolean(searchQuery) ||
+    Boolean(intentFilter) ||
+    Boolean(priorityFilter) ||
+    Boolean(statusFilter) ||
+    atRiskOnly ||
+    unassignedOnly;
 
-  const handleSuggest = async () => {
-    if (!createTitle && !createDesc) return;
-    setSuggestingIntent(true);
+  const handleClearFilters = () => {
+    setSearchQuery("");
+    setDebouncedSearch("");
+    setIntentFilter("");
+    setPriorityFilter("");
+    setStatusFilter("");
+    setAtRiskOnly(false);
+    setUnassignedOnly(false);
+    setHealthBarFilter("ALL");
+    setPage(0);
+  };
+
+  // HealthBar filter handler
+  const handleHealthBarFilter = (
+    type: "ALL" | "OPEN" | "AT_RISK" | "BREACHED" | "UNASSIGNED"
+  ) => {
+    setHealthBarFilter(type);
+    setPage(0);
+    if (type === "ALL") {
+      setAtRiskOnly(false);
+      setUnassignedOnly(false);
+      setStatusFilter("");
+    } else if (type === "AT_RISK") {
+      setAtRiskOnly(true);
+      setUnassignedOnly(false);
+      setStatusFilter("");
+    } else if (type === "BREACHED") {
+      setAtRiskOnly(true);
+      setUnassignedOnly(false);
+      setStatusFilter("");
+    } else if (type === "UNASSIGNED") {
+      setUnassignedOnly(true);
+      setAtRiskOnly(false);
+      setStatusFilter("");
+    } else if (type === "OPEN") {
+      setAtRiskOnly(false);
+      setUnassignedOnly(false);
+      setStatusFilter("Open");
+    }
+  };
+
+  // CSV Export Handler
+  const handleExportCsv = async () => {
+    if (!isStaff) {
+      showToast("CSV export is restricted to internal operations staff.", "warning");
+      return;
+    }
+    setIsExporting(true);
+    showToast("Preparing download: generating operations export...", "info");
     try {
-      const res = await suggestIntent(createTitle, createDesc, currentUser.id);
-      if (res && res.intent) {
-        setCreateIntent(res.intent);
+      const res = await fetch(getExportUrl(), {
+        headers: { "X-User-Id": currentUser.id },
+      });
+      if (!res.ok) {
+        throw new Error(`Export failed with HTTP ${res.status}`);
       }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `opsdesk_export_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      showToast("Operations queue export downloaded successfully.", "success");
     } catch (err: unknown) {
-      console.error(err);
+      showToast(err instanceof Error ? err.message : "Export failed. Please try again.", "error");
     } finally {
-      setSuggestingIntent(false);
+      setIsExporting(false);
     }
   };
 
-  const handleCreateSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCreating(true);
-    setCreateError(null);
-    try {
-      await createTicket(
-        {
-          title: createTitle,
-          description: createDesc,
-          tboh_id: createTboh,
-          priority: createPrio,
-          check_in_date: new Date(createCheckin).toISOString(),
-          lcd_date: createLcd ? new Date(createLcd).toISOString() : null,
-          intent: createIntent || null,
-          agency_id: isStaff ? createAgency : undefined,
-        },
-        currentUser.id
-      );
-      setIsCreateOpen(false);
-      setCreateTitle("");
-      setCreateDesc("");
-      setCreateTboh("");
-      setCreateCheckin("");
-      setCreateLcd("");
-      setCreateIntent("");
-      loadData();
-    } catch (err: unknown) {
-      setCreateError(err instanceof Error ? err.message : "Failed to create ticket");
-    } finally {
-      setCreating(false);
+  // Split-View Drawer Selection & Keyboard Navigation (J/K)
+  const handleSelectTicket = (ticketId: string) => {
+    setSelectedTicketId(ticketId);
+    setIsDrawerOpen(true);
+  };
+
+  const handleNextTicket = () => {
+    if (!selectedTicketId || tickets.length === 0) return;
+    const currentIndex = tickets.findIndex((t) => t.id === selectedTicketId);
+    if (currentIndex < tickets.length - 1) {
+      setSelectedTicketId(tickets[currentIndex + 1].id);
     }
   };
 
-  const staffTabs = [
-    { id: "triage", label: "Triage (Unassigned)" },
-    { id: "my_queue", label: "My Queue" },
-    { id: "by_region", label: `By Region (${currentUser.region || "All"})` },
-    { id: "by_intent", label: "By Intent" },
-    { id: "linked", label: "Linked Cases" },
-  ];
+  const handlePrevTicket = () => {
+    if (!selectedTicketId || tickets.length === 0) return;
+    const currentIndex = tickets.findIndex((t) => t.id === selectedTicketId);
+    if (currentIndex > 0) {
+      setSelectedTicketId(tickets[currentIndex - 1].id);
+    }
+  };
 
-  const requesterTabs = [
-    { id: "my_agency", label: "All Agency Tickets" },
-    { id: "by_intent", label: "By Intent" },
-    { id: "linked", label: "Linked Cases" },
-  ];
-
-  const availableTabs = isRequester ? requesterTabs : staffTabs;
+  const firstTicketId = tickets.length > 0 ? tickets[0].id : null;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            {isRequester ? `${currentUser.name} Operations Portal` : "Operations Queue & Triage"}
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            {isRequester
-              ? "View and create support cases for your agency bookings."
-              : "Live B2B travel operations desk with intent-aware SLAs and 2-tier workload routing."}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => { void loadData(); }}
-            disabled={loading}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-md shadow-sm hover:bg-slate-50 disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-indigo-600" : ""}`} />
-            Refresh
-          </button>
-          <button
-            onClick={() => setIsCreateOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 rounded-md shadow-sm hover:bg-indigo-700 transition-colors"
-          >
-            <PlusCircle className="w-4 h-4" />
-            New Ticket
-          </button>
-        </div>
-      </div>
+    <div className="flex flex-col gap-5">
+      {/* 1. Header: Operations Queue + "Work next" + "Export CSV" + "New ticket" */}
+      <QueueHeader
+        totalCount={totalCount}
+        firstTicketId={firstTicketId}
+        isStaff={isStaff}
+        isExporting={isExporting}
+        onExport={handleExportCsv}
+        onCreateOpen={() => setIsCreateOpen(true)}
+      />
 
-      {/* Tabs Bar */}
-      <div className="border-b border-slate-200 flex flex-wrap items-center justify-between gap-4 mb-6">
-        <nav className="flex space-x-4 overflow-x-auto" aria-label="Tabs">
-          {availableTabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => {
-                setActiveTab(tab.id);
-                setPage(0);
-              }}
-              className={`py-3 px-2 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
-                activeTab === tab.id
-                  ? "border-indigo-600 text-indigo-600"
-                  : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
+      {/* 2. Signature Departure Board Strip (top 5 most urgent check-ins) */}
+      <DepartureBoardStrip
+        tickets={tickets}
+        onSelectTicket={handleSelectTicket}
+      />
 
-        {/* Optional Intent Filter */}
-        {activeTab === "by_intent" && (
-          <div className="flex items-center gap-2 pb-2">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <select
-              value={intentFilter}
-              onChange={(e) => {
-                setIntentFilter(e.target.value);
-                setPage(0);
-              }}
-              aria-label="Filter by intent"
-              className="text-xs bg-white border border-slate-300 text-slate-700 rounded-md px-2 py-1 focus:ring-1 focus:ring-indigo-500"
-            >
-              <option value="">All Intents</option>
-              <option value="Refund Request">Refund Request</option>
-              <option value="Cancellation Inconvenience">Cancellation Inconvenience</option>
-              <option value="Emergency Check-in Assist">Emergency Check-in Assist</option>
-              <option value="Date Amendment">Date Amendment</option>
-              <option value="Bedding / Room Preference">Bedding / Room Preference</option>
-              <option value="Voucher Resend">Voucher Resend</option>
-              <option value="Unclassified">Unclassified</option>
-            </select>
-          </div>
-        )}
-      </div>
+      {/* 3. HealthBar Strip (replaces old KPI cards with stacked SLA split + CountUp) */}
+      <QueueKpiStrip
+        tickets={tickets}
+        activeFilter={healthBarFilter}
+        onFilterClick={handleHealthBarFilter}
+      />
 
-      {/* Table Content */}
-      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+      {/* 4. View Tabs & View Mode Toggle (Table | Cards) */}
+      <QueueTabs
+        activeTab={activeTab}
+        onTabChange={(tabId) => {
+          setActiveTab(tabId);
+          setPage(0);
+        }}
+        isRequester={isRequester}
+        totalCount={totalCount}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        hasActiveFilters={hasActiveFilters}
+        onToggleMobileFilters={() => setMobileFiltersOpen((prev) => !prev)}
+      />
+
+      {/* 5. Filter Bar (Desktop) - compact 36px row with removable chips */}
+      <QueueFilterBar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        debouncedSearch={debouncedSearch}
+        intentFilter={intentFilter}
+        onIntentChange={(val) => {
+          setIntentFilter(val);
+          setPage(0);
+        }}
+        priorityFilter={priorityFilter}
+        onPriorityChange={(val) => {
+          setPriorityFilter(val);
+          setPage(0);
+        }}
+        statusFilter={statusFilter}
+        onStatusChange={(val) => {
+          setStatusFilter(val);
+          setPage(0);
+        }}
+        atRiskOnly={atRiskOnly}
+        onToggleAtRisk={() => {
+          setAtRiskOnly((prev) => !prev);
+          setPage(0);
+        }}
+        hasActiveFilters={hasActiveFilters}
+        onClearFilters={handleClearFilters}
+        className="hidden sm:flex"
+      />
+
+      {/* 6. Main Content Area (Table or Cards) */}
+      <div className="bg-surface border border-border rounded-card shadow-xs overflow-hidden">
         {error ? (
-          <div className="p-8 text-center">
-            <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
-            <p className="text-sm font-semibold text-slate-800">Error Loading Tickets</p>
-            <p className="text-xs text-red-600 mt-1">{error}</p>
+          <div className="p-6">
+            <ErrorState title="Failed to load tickets" message={error} onRetry={loadData} />
           </div>
-        ) : loading && tickets.length === 0 ? (
-          <div className="p-12 text-center text-slate-400">
-            <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-indigo-500" />
-            <p className="text-sm">Loading operations queue...</p>
-          </div>
-        ) : tickets.length === 0 ? (
-          <div className="p-12 text-center text-slate-400">
-            <Inbox className="w-10 h-10 mx-auto mb-2 stroke-1 text-slate-300" />
-            <p className="text-sm font-medium text-slate-600">No tickets found</p>
-            <p className="text-xs text-slate-400 mt-1">There are no records in this view matching current filters.</p>
-          </div>
+        ) : !loading && tickets.length === 0 ? (
+          <EmptyState
+            title="No cases found in this view"
+            description={
+              hasActiveFilters
+                ? "Try adjusting your search keywords or resetting active filters."
+                : "Your operations dispatch queue is clear. Good job!"
+            }
+            actionLabel={hasActiveFilters ? "Clear active filters" : "Create new ticket"}
+            onAction={hasActiveFilters ? handleClearFilters : () => setIsCreateOpen(true)}
+            className="my-6"
+          />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
-              <thead className="bg-slate-50 text-slate-700 font-semibold text-xs uppercase tracking-wider">
-                <tr>
-                  <th className="px-4 py-3">ID & Title</th>
-                  <th className="px-4 py-3">TBOH Ref</th>
-                  <th className="px-4 py-3">Intent</th>
-                  <th className="px-4 py-3">Priority</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">SLA Urgency</th>
-                  {isStaff && <th className="px-4 py-3">Assignee</th>}
-                  {isStaff && <th className="px-4 py-3 text-right">Queue Score</th>}
-                  <th className="px-4 py-3 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {tickets.map((ticket) => (
-                  <tr key={ticket.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 font-medium">
-                      <Link
-                        href={`/ticket/${ticket.id}`}
-                        className="text-indigo-600 hover:text-indigo-800 font-semibold hover:underline block"
-                      >
-                        {ticket.id}
-                      </Link>
-                      <span className="text-xs text-slate-700 block truncate max-w-xs">{ticket.title}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="font-mono text-xs text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                        {ticket.tboh_id}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-slate-700">
-                      {ticket.intent || <span className="text-slate-400 italic">Unclassified</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <PriorityBadge priority={ticket.priority} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={ticket.status} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <SLABadge sla={calculateClientSla(ticket.sla, lastFetchedAt, currentTime)} />
-                    </td>
-                    {isStaff && (
-                      <td className="px-4 py-3 text-xs text-slate-600">
-                        {ticket.assigned_to ? (
-                          <span className="font-medium text-slate-800">{ticket.assigned_to}</span>
-                        ) : (
-                          <span className="text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded text-[11px] font-semibold">
-                            Unassigned
-                          </span>
-                        )}
-                      </td>
-                    )}
-                    {isStaff && (
-                      <td
-                        className="px-4 py-3 text-xs font-mono font-semibold text-right text-slate-700 cursor-help"
-                        title={ticket.routing_reason ? `Routing Reason: ${ticket.routing_reason}` : "Tier-2 Continuous Score"}
-                      >
-                        {ticket.queue_score !== null ? ticket.queue_score.toFixed(1) : "—"}
-                      </td>
-                    )}
-                    <td className="px-4 py-3 text-right">
-                      <Link
-                        href={`/ticket/${ticket.id}`}
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-900"
-                      >
-                        <span>View</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+          <>
+            {/* Desktop Table View (Fits 1280px with NO horizontal scrollbar) */}
+            <div className="hidden md:block">
+              {viewMode === "table" ? (
+                <QueueTable
+                  tickets={tickets}
+                  loading={loading}
+                  page={page}
+                  pageSize={pageSize}
+                  isStaff={isStaff}
+                  selectedTicketId={selectedTicketId}
+                  onSelectTicket={handleSelectTicket}
+                  onIntentFilter={(intent) => {
+                    setIntentFilter(intent);
+                    setPage(0);
+                  }}
+                  onPriorityFilter={(priority) => {
+                    setPriorityFilter(priority);
+                    setPage(0);
+                  }}
+                  onRefresh={loadData}
+                />
+              ) : (
+                <QueueCardsView
+                  tickets={tickets}
+                  selectedTicketId={selectedTicketId}
+                  onSelectTicket={handleSelectTicket}
+                  onRefresh={loadData}
+                />
+              )}
+            </div>
 
-        {/* Pagination Footer */}
-        <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
-          <div>
-            Showing <span className="font-semibold">{tickets.length > 0 ? page * pageSize + 1 : 0}</span> to{" "}
-            <span className="font-semibold">{Math.min((page + 1) * pageSize, totalCount)}</span> of{" "}
-            <span className="font-semibold">{totalCount}</span> cases
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={page === 0 || loading}
-              className="inline-flex items-center px-2 py-1 border border-slate-300 rounded bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40"
-            >
-              <ChevronLeft className="w-3.5 h-3.5" />
-              Prev
-            </button>
-            <span className="px-2 font-medium">Page {page + 1}</span>
-            <button
-              onClick={() => setPage((p) => p + 1)}
-              disabled={(page + 1) * pageSize >= totalCount || loading}
-              className="inline-flex items-center px-2 py-1 border border-slate-300 rounded bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40"
-            >
-              Next
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
+            {/* Mobile View (< 768px): Stacked cards with "..." quick actions */}
+            <div className="block md:hidden divide-y divide-border">
+              {tickets.map((t, idx) => (
+                <MobileTicketCard
+                  key={t.id}
+                  ticket={t}
+                  rank={page * pageSize + idx + 1}
+                  onRefresh={loadData}
+                  onSelectTicket={handleSelectTicket}
+                />
+              ))}
+            </div>
+
+            {/* 7. Pagination Footer */}
+            <QueuePagination
+              page={page}
+              pageSize={pageSize}
+              totalCount={totalCount}
+              loading={loading}
+              onPageChange={setPage}
+            />
+          </>
+        )}
       </div>
 
-      {/* Create Ticket Modal */}
-      {isCreateOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 border border-slate-200">
-            <h2 className="text-lg font-bold text-slate-900 mb-1">Create New Operations Case</h2>
-            <p className="text-xs text-slate-500 mb-4">
-              Enter case details. Shared TBOH codes automatically link prior booking history.
-            </p>
+      {/* 8. Split View Preview Panel (Drawer loading ticket via fetchTicketDetail) */}
+      <QueuePreviewDrawer
+        ticketId={selectedTicketId}
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        onNextTicket={handleNextTicket}
+        onPrevTicket={handlePrevTicket}
+        onRefresh={loadData}
+      />
 
-            {createError && (
-              <div className="mb-4 p-3 rounded bg-red-50 border border-red-200 text-xs text-red-700">
-                {createError}
-              </div>
-            )}
+      {/* 9. Mobile Filter Bottom Sheet */}
+      <MobileFilterSheet
+        isOpen={mobileFiltersOpen}
+        onClose={() => setMobileFiltersOpen(false)}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        intentFilter={intentFilter}
+        onIntentChange={(val) => {
+          setIntentFilter(val);
+          setPage(0);
+        }}
+        priorityFilter={priorityFilter}
+        onPriorityChange={(val) => {
+          setPriorityFilter(val);
+          setPage(0);
+        }}
+        statusFilter={statusFilter}
+        onStatusChange={(val) => {
+          setStatusFilter(val);
+          setPage(0);
+        }}
+        atRiskOnly={atRiskOnly}
+        onToggleAtRisk={() => {
+          setAtRiskOnly((prev) => !prev);
+          setPage(0);
+        }}
+        hasActiveFilters={hasActiveFilters}
+        onClearFilters={handleClearFilters}
+      />
 
-            <form onSubmit={handleCreateSubmit} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Ticket Title</label>
-                <input
-                  type="text"
-                  required
-                  value={createTitle}
-                  onChange={(e) => setCreateTitle(e.target.value)}
-                  placeholder="e.g. Flight delay or guest arrival check-in issue"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-indigo-500 text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Description</label>
-                <textarea
-                  required
-                  rows={3}
-                  value={createDesc}
-                  onChange={(e) => setCreateDesc(e.target.value)}
-                  placeholder="Operational context and specific guest request"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-indigo-500 text-xs"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">TBOH Booking ID</label>
-                  <input
-                    type="text"
-                    required
-                    pattern="^TBOH-[A-Za-z0-9-]{3,30}$"
-                    value={createTboh}
-                    onChange={(e) => setCreateTboh(e.target.value)}
-                    placeholder="TBOH-12345"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-indigo-500 text-xs font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Priority</label>
-                  <select
-                    value={createPrio}
-                    onChange={(e) => setCreatePrio(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-indigo-500 text-xs"
-                  >
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                    <option value="Urgent">Urgent</option>
-                  </select>
-                </div>
-              </div>
-
-              {isStaff && (
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Agency ID</label>
-                  <select
-                    value={createAgency}
-                    onChange={(e) => setCreateAgency(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-indigo-500 text-xs"
-                  >
-                    <option value="AGY-001">Demo Agency A (fictional) (AGY-001)</option>
-                    <option value="AGY-002">Demo Agency B (fictional) (AGY-002)</option>
-                    <option value="AGY-003">Horizon Holidays (AGY-003)</option>
-                  </select>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Check-in Date & Time</label>
-                  <input
-                    type="datetime-local"
-                    required
-                    value={createCheckin}
-                    onChange={(e) => setCreateCheckin(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-indigo-500 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">LCD Date (Optional)</label>
-                  <input
-                    type="datetime-local"
-                    value={createLcd}
-                    onChange={(e) => setCreateLcd(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-indigo-500 text-xs"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block font-semibold text-slate-700">Intent Category</label>
-                  <button
-                    type="button"
-                    onClick={handleSuggest}
-                    disabled={suggestingIntent || (!createTitle && !createDesc)}
-                    className="inline-flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold"
-                  >
-                    <Sparkles className="w-3 h-3 text-indigo-500" />
-                    {suggestingIntent ? "Suggesting..." : "Auto-Suggest"}
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  value={createIntent}
-                  onChange={(e) => setCreateIntent(e.target.value)}
-                  placeholder="e.g. Refund Request or Emergency Check-in Assist"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-indigo-500 text-xs"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setIsCreateOpen(false)}
-                  className="px-3 py-2 rounded border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="px-4 py-2 rounded bg-indigo-600 text-white font-semibold hover:bg-indigo-700 disabled:opacity-50"
-                >
-                  {creating ? "Submitting..." : "Create Case"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* 10. Create Ticket Modal (640px) */}
+      <CreateTicketModal
+        isOpen={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        onSuccess={loadData}
+      />
     </div>
   );
 }

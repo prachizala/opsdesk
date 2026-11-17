@@ -1,15 +1,276 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  /* Typography Stacks */
+  --font-inter: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-heading: "Plus Jakarta Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Airport Control Tower Chrome Tokens (Navy-900 / Navy-800) */
+  --chrome-navy-900: #0B1F2A;
+  --chrome-navy-800: #12303F;
+  --chrome-text: #E6F1F5;
+  --chrome-muted: #8FB0BD;
+  --departure-amber: #FFB020;
+
+  /* Canvas & Surface Tokens */
+  --canvas: #F5F7FA;
+  --surface: #FFFFFF;
+  --surface-subtle: #EEF2F6;
+  --border: #E3E7ED;
+  --border-strong: #CBD2DC;
+
+  /* Typography Tokens (Contrast >= 4.5:1 on white) */
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-tertiary: #64748B;
+  --text-disabled: #94A3B8;
+
+  /* Brand Tokens (Ocean Teal) */
+  --brand-50: #ECFEFF;
+  --brand-100: #CFFAFE;
+  --brand-500: #0E9AA7;
+  --brand-600: #0B7F8B;
+  --brand-700: #0A6772;
+
+  /* SLA Semantic Tokens */
+  --sla-normal-text: #15803D;
+  --sla-normal-bg: #DCFCE7;
+  --sla-at-risk-text: #B45309;
+  --sla-at-risk-bg: #FEF3C7;
+  --sla-breached-text: #B91C1C;
+  --sla-breached-bg: #FEE2E2;
+  --sla-escalated-text: #6D28D9;
+  --sla-escalated-bg: #EDE9FE;
+  --sla-stopped-text: #64748B;
+  --sla-stopped-bg: #F1F3F6;
+
+  /* Region Tokens (Small tags/flags) */
+  --region-mea-text: #D97706;
+  --region-mea-bg: #FEF3C7;
+  --region-apac-text: #0D9488;
+  --region-apac-bg: #CCFBF1;
+  --region-eu-text: #2563EB;
+  --region-eu-bg: #DBEAFE;
+  --region-amer-text: #7C3AED;
+  --region-amer-bg: #EDE9FE;
+
+  /* Priority Tokens (Neutral-to-warm tones, red reserved for Breached) */
+  --priority-urgent-text: #B45309;
+  --priority-urgent-bg: #FEF3C7;
+  --priority-high-text: #C2410C;
+  --priority-high-bg: #FFEDD5;
+  --priority-medium-text: #1D4ED8;
+  --priority-medium-bg: #DBEAFE;
+  --priority-low-text: #64748B;
+  --priority-low-bg: #F1F3F6;
+
+  /* Status Tokens (Soft Tint, No Border) */
+  --status-new-text: #1D4ED8;
+  --status-new-bg: #EFF6FF;
+  --status-open-text: #0E9AA7;
+  --status-open-bg: #ECFEFF;
+  --status-pending-text: #B45309;
+  --status-pending-bg: #FEF3C7;
+  --status-escalated-text: #6D28D9;
+  --status-escalated-bg: #EDE9FE;
+  --status-resolved-text: #15803D;
+  --status-resolved-bg: #DCFCE7;
+  --status-closed-text: #64748B;
+  --status-closed-bg: #F1F3F6;
+
+  /* Geometry & Radius */
+  --radius-input: 6px;
+  --radius-chip: 6px;
+  --radius-card: 10px;
+  --radius-modal: 14px;
+
+  /* Motion Tokens */
+  --duration-hover: 120ms;
+  --duration-panel: 180ms;
+  --tooltip-delay: 400ms;
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    background-color: var(--canvas);
+    color: var(--text-primary);
+    font-family: var(--font-inter);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, .font-heading {
+    font-family: var(--font-heading);
+    letter-spacing: -0.015em;
+  }
+
+  /* Strict focus visible ring: 2px brand-500 with 2px offset */
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [tabindex="0"]:focus-visible {
+    outline: 2px solid var(--brand-500) !important;
+    outline-offset: 2px !important;
+  }
+}
+
+/* Strict Tabular Numbers for IDs, Timestamps, and Countdowns */
+.font-mono-numbers {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Micro-interaction transition defaults (transform and opacity only - no layout shifts) */
+.transition-subtle {
+  transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
+  transition-timing-function: var(--ease-out);
+  transition-duration: var(--duration-hover);
+}
+
+.transition-panel {
+  transition-property: transform, opacity, box-shadow;
+  transition-timing-function: var(--ease-out);
+  transition-duration: var(--duration-panel);
+}
+
+/* Pulse animation for breached SLA ring - subtle, pauses on hover */
+@keyframes sla-breach-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.65;
+    transform: scale(1.06);
+  }
+}
+
+.animate-sla-breach {
+  animation: sla-breach-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-sla-breach:hover {
+  animation-play-state: paused;
+}
+
+/* Shine sweep animation for primary buttons */
+@keyframes shine-sweep {
+  0% {
+    left: -100%;
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.35;
+  }
+  80% {
+    opacity: 0.35;
+  }
+  100% {
+    left: 150%;
+    opacity: 0;
+  }
+}
+
+.btn-shine-sweep {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-shine-sweep::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.3) 50%,
+    transparent 100%
+  );
+  transform: skewX(-20deg);
+  pointer-events: none;
+}
+
+.btn-shine-sweep:hover::after {
+  animation: shine-sweep 0.7s ease-out;
+}
+
+/* Violet wipe hover for danger button */
+.btn-danger-wipe {
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.btn-danger-wipe::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: #6D28D9;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 140ms ease-out;
+  z-index: -1;
+}
+
+.btn-danger-wipe:hover::before {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+/* Split-flap digit flip transition */
+@keyframes flap-top-flip {
+  0% {
+    transform: rotateX(0deg);
+  }
+  100% {
+    transform: rotateX(-90deg);
+  }
+}
+
+@keyframes flap-bottom-flip {
+  0% {
+    transform: rotateX(90deg);
+  }
+  100% {
+    transform: rotateX(0deg);
+  }
+}
+
+.split-flap-container {
+  perspective: 300px;
+}
+
+/* Accessibility: respects reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-sla-breach,
+  .btn-shine-sweep::after,
+  .btn-danger-wipe::before {
+    animation: none !important;
+    transition: none !important;
+  }
 }

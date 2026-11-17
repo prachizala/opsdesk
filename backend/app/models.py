@@ -76,6 +76,9 @@ class EventOutbox(Base):
     payload_json = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     delivered_at = Column(DateTime, nullable=True)
+    status = Column(String(20), default="pending", nullable=False, index=True)
+    retry_count = Column(Integer, default=0, nullable=False)
+    last_error = Column(Text, nullable=True)
 
     ticket = relationship("Ticket", back_populates="outbox_events")
     agency = relationship("Agency")
