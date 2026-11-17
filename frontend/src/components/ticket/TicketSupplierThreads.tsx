@@ -114,8 +114,8 @@ export function TicketSupplierThreads({
               </div>
 
               {/* Subtle line after transfer: "Agent changed to <name> - supplier recipients unchanged" */}
-              <div className="flex items-center gap-2 py-1.5 px-3 bg-slate-50 border border-slate-200 rounded-input text-[12px] text-content-secondary">
-                <CheckCircle2 className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+              <div className="flex items-center gap-2 py-1.5 px-3 bg-surface-subtle border border-border rounded-input text-[12px] text-content-secondary">
+                <CheckCircle2 className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 shrink-0" />
                 <span>
                   Agent changed to <strong className="text-content-primary">{assigneeName}</strong> — supplier recipients unchanged
                 </span>

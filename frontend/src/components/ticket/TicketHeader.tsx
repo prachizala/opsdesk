@@ -96,7 +96,7 @@ export function TicketHeader({
         )}
       >
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          {/* Metadata & Title */}
+          {/* Metadata & Title with Eyebrow */}
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2.5">
               <span className="font-mono-numbers text-xs font-semibold px-2 py-0.5 rounded bg-surface-subtle text-content-primary border border-border">
@@ -121,22 +121,40 @@ export function TicketHeader({
               </div>
             </div>
 
-            <h1 className="text-xl sm:text-2xl font-semibold text-content-primary tracking-tight">
-              {ticket.title}
-            </h1>
+            <div>
+              <div className="text-[11px] font-semibold text-content-tertiary uppercase tracking-wider mb-1">
+                Booking Incident · {ticket.tboh_id} · {ticket.agency_id}
+              </div>
+              <h1 className="text-xl sm:text-2xl font-semibold text-content-primary tracking-tight">
+                {ticket.title}
+              </h1>
+            </div>
           </div>
 
           {/* Action Buttons (Staff Only) */}
           {isStaff && (
             <div className="flex flex-wrap items-center gap-2 shrink-0">
               {/* 1. ASSIGN / CLAIM BUTTON */}
-              {isAssignedToMe ? (
+              {isClosed ? (
+                <Tooltip content="Cannot assign a closed ticket">
+                  <span>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<UserCheck className="w-3.5 h-3.5 text-content-disabled" />}
+                      disabled
+                    >
+                      Assign
+                    </Button>
+                  </span>
+                </Tooltip>
+              ) : isAssignedToMe ? (
                 <Tooltip content="Case is assigned to your active queue">
                   <span>
                     <Button
                       variant="secondary"
                       size="sm"
-                      icon={<UserCheck className="w-3.5 h-3.5 text-emerald-600" />}
+                      icon={<UserCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />}
                       disabled
                     >
                       Assigned to You
@@ -164,7 +182,20 @@ export function TicketHeader({
               )}
 
               {/* 2. UNASSIGN BUTTON */}
-              {ticket.assigned_to ? (
+              {isClosed ? (
+                <Tooltip content="Cannot unassign a closed ticket">
+                  <span>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<UserX className="w-3.5 h-3.5 text-content-disabled" />}
+                      disabled
+                    >
+                      Unassign
+                    </Button>
+                  </span>
+                </Tooltip>
+              ) : ticket.assigned_to ? (
                 <Button
                   variant="secondary"
                   size="sm"
@@ -227,9 +258,9 @@ export function TicketHeader({
                     <button
                       type="button"
                       disabled
-                      className="inline-flex items-center gap-1.5 h-8 px-3 text-caption font-semibold rounded-input border border-violet-200 bg-violet-50 text-violet-400 opacity-60 cursor-not-allowed"
+                      className="inline-flex items-center gap-1.5 h-8 px-3 text-caption font-semibold rounded-input border border-violet-200 dark:border-violet-800/60 bg-violet-50 dark:bg-violet-950/40 text-violet-400 dark:text-violet-500 opacity-60 cursor-not-allowed"
                     >
-                      <ShieldAlert className="w-3.5 h-3.5 text-violet-400" />
+                      <ShieldAlert className="w-3.5 h-3.5 text-violet-400 dark:text-violet-500" />
                       <span>Escalated</span>
                     </button>
                   </span>
@@ -240,9 +271,9 @@ export function TicketHeader({
                     <button
                       type="button"
                       disabled
-                      className="inline-flex items-center gap-1.5 h-8 px-3 text-caption font-semibold rounded-input border border-violet-200 bg-violet-50 text-violet-400 opacity-60 cursor-not-allowed"
+                      className="inline-flex items-center gap-1.5 h-8 px-3 text-caption font-semibold rounded-input border border-violet-200 dark:border-violet-800/60 bg-violet-50 dark:bg-violet-950/40 text-violet-400 dark:text-violet-500 opacity-60 cursor-not-allowed"
                     >
-                      <ShieldAlert className="w-3.5 h-3.5 text-violet-400" />
+                      <ShieldAlert className="w-3.5 h-3.5 text-violet-400 dark:text-violet-500" />
                       <span>Escalate</span>
                     </button>
                   </span>
@@ -251,10 +282,10 @@ export function TicketHeader({
                 <button
                   type="button"
                   onClick={onOpenEscalate}
-                  className="relative overflow-hidden border border-violet-500 text-violet-700 font-semibold rounded-input px-3 h-8 text-caption inline-flex items-center gap-1.5 group transition-colors duration-300 before:absolute before:inset-0 before:bg-violet-600 before:translate-x-[-101%] hover:before:translate-x-0 before:transition-transform before:duration-300 before:ease-out z-0 cursor-pointer shadow-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="relative overflow-hidden border border-violet-500 text-violet-700 dark:text-violet-300 font-semibold rounded-input px-3 h-8 text-caption inline-flex items-center gap-1.5 group transition-colors duration-300 before:absolute before:inset-0 before:bg-violet-600 before:translate-x-[-101%] hover:before:translate-x-0 before:transition-transform before:duration-300 before:ease-out z-0 cursor-pointer shadow-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
                 >
                   <span className="relative z-10 flex items-center gap-1.5 group-hover:text-white transition-colors duration-300">
-                    <ShieldAlert className="w-3.5 h-3.5 text-violet-600 group-hover:text-white transition-colors duration-300" />
+                    <ShieldAlert className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400 group-hover:text-white transition-colors duration-300" />
                     <span>Escalate</span>
                   </span>
                 </button>

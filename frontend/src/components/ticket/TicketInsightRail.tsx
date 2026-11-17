@@ -142,10 +142,10 @@ export function TicketInsightRail({
               className={cn(
                 "text-[11px] font-semibold px-2 py-0.5 rounded-full border uppercase tracking-wider",
                 ticket.sla.status === "BREACHED"
-                  ? "bg-red-50 text-red-700 border-red-200"
+                  ? "bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800"
                   : ticket.sla.status === "AT_RISK"
-                  ? "bg-amber-50 text-amber-800 border-amber-200"
-                  : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                  ? "bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-400 border-amber-200 dark:border-amber-800"
+                  : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800"
               )}
             >
               {ticket.sla.status.replace("_", " ")}
@@ -156,7 +156,7 @@ export function TicketInsightRail({
         {/* Highlighted Controlling Constraint: "Controlled by check-in / LCD" */}
         <div className="mb-4 p-2.5 bg-surface-subtle border border-border rounded-input flex items-center justify-between text-caption">
           <span className="font-medium text-content-secondary flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-brand-600" />
+            <Clock className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />
             Controlling:
           </span>
           <span className="font-semibold text-content-primary bg-surface px-2 py-0.5 rounded border border-border shadow-xs">
@@ -175,7 +175,7 @@ export function TicketInsightRail({
                 {formatCountdown(secondsRemaining)}
               </span>
             </div>
-            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden border border-border">
+            <div className="h-2 w-full bg-surface-subtle rounded-full overflow-hidden border border-border">
               <div
                 className={cn(
                   "h-full rounded-full transition-all duration-300",
@@ -198,12 +198,12 @@ export function TicketInsightRail({
               <span className="font-semibold text-content-primary">
                 First Response SLA
               </span>
-              <span className="font-mono-numbers text-[12px] font-medium text-emerald-700 flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+              <span className="font-mono-numbers text-[12px] font-medium text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                 Met (14m)
               </span>
             </div>
-            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden border border-border">
+            <div className="h-2 w-full bg-surface-subtle rounded-full overflow-hidden border border-border">
               <div className="h-full bg-emerald-500 rounded-full w-1/4" />
             </div>
           </div>
@@ -211,13 +211,13 @@ export function TicketInsightRail({
       </Card>
 
       {/* 2. "WHY IT'S HERE": ROUTING REASON CARD */}
-      <Card padding="md" className="bg-gradient-to-br from-brand-50/40 via-surface to-surface border-brand-200">
+      <Card padding="md" className="bg-gradient-to-br from-brand-50/40 dark:from-brand-950/20 via-surface to-surface border-brand-200 dark:border-brand-800/60">
         <div className="flex items-start gap-2.5">
-          <div className="p-1.5 rounded-card bg-brand-100/70 text-brand-700 mt-0.5 shrink-0">
-            <Sparkles className="w-4 h-4 text-brand-600" />
+          <div className="p-1.5 rounded-card bg-brand-100/70 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 mt-0.5 shrink-0">
+            <Sparkles className="w-4 h-4 text-brand-600 dark:text-brand-400" />
           </div>
           <div>
-            <h3 className="text-caption font-semibold text-brand-900 uppercase tracking-wider">
+            <h3 className="text-caption font-semibold text-brand-900 dark:text-brand-200 uppercase tracking-wider">
               Why It&apos;s Here
             </h3>
             <p className="text-caption text-content-secondary mt-1 leading-relaxed">
@@ -338,7 +338,7 @@ export function TicketInsightRail({
           </div>
 
           {/* Mini Progress Bar */}
-          <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden border border-border mt-1">
+          <div className="h-1.5 w-full bg-surface-subtle rounded-full overflow-hidden border border-border mt-1">
             <div
               className="h-full bg-brand-600 rounded-full transition-all"
               style={{ width: `${Math.min(100, totalScore)}%` }}
@@ -351,13 +351,13 @@ export function TicketInsightRail({
       <Card padding="md">
         <div className="flex items-center justify-between mb-3">
           <span className="text-caption font-semibold text-content-primary uppercase tracking-wider flex items-center gap-1.5">
-            <Bug className="w-3.5 h-3.5 text-brand-600" />
+            <Bug className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />
             Product Defect
           </span>
           <button
             type="button"
             onClick={onOpenBugModal}
-            className="text-caption text-brand-600 hover:text-brand-700 font-semibold cursor-pointer transition-subtle"
+            className="text-caption text-brand-600 dark:text-brand-400 hover:text-brand-700 font-semibold cursor-pointer transition-subtle"
           >
             {ticket.suggested_bug_link ? "Edit Defect" : "Attach Defect"}
           </button>
@@ -368,10 +368,10 @@ export function TicketInsightRail({
             href={ticket.suggested_bug_link}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center justify-between gap-2 text-caption font-mono-numbers text-brand-700 hover:underline break-all bg-brand-50 p-2.5 rounded-input border border-brand-200 w-full transition-subtle group"
+            className="inline-flex items-center justify-between gap-2 text-caption font-mono-numbers text-brand-700 dark:text-brand-300 hover:underline break-all bg-brand-50 dark:bg-brand-950/40 p-2.5 rounded-input border border-brand-200 dark:border-brand-800 w-full transition-subtle group"
           >
             <span className="truncate">{ticket.suggested_bug_link}</span>
-            <ExternalLink className="w-3.5 h-3.5 shrink-0 text-brand-600 group-hover:translate-x-0.5 transition-subtle" />
+            <ExternalLink className="w-3.5 h-3.5 shrink-0 text-brand-600 dark:text-brand-400 group-hover:translate-x-0.5 transition-subtle" />
           </a>
         ) : (
           <div className="text-caption text-content-tertiary italic p-2 bg-surface-subtle rounded-input border border-dashed border-border text-center">
