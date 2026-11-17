@@ -37,12 +37,11 @@ OpsDesk enforces strict multi-agency isolation guarantees:
 
 ## 4. Reporting a Vulnerability
 
-If you discover a security vulnerability or potential privacy breach in OpsDesk:
+OpsDesk is an open-source hackathon prototype. Vulnerability reporting and triage are handled on a **best-effort, hackathon prototype** basis:
 
-1. **Do NOT open a public GitHub issue.**
-2. Send an email to the security response team at: **security@example.com** (or contact repository maintainers via GitHub private security advisories).
+1. **Do NOT open a public GitHub issue for sensitive security exploits.**
+2. Report vulnerabilities via GitHub Private Security Advisories on this repository.
 3. Include:
    - Description of the vulnerability and affected endpoint/component.
    - Proof of Concept (PoC) or reproducible steps.
    - Potential impact on tenant isolation or data integrity.
-4. We acknowledge receipt within 48 hours and work with you on a coordinated disclosure timeline.

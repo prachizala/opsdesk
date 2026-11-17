@@ -1,18 +1,20 @@
 import uuid
 import csv
 import io
+import json
+import hashlib
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
-from fastapi import FastAPI, Depends, HTTPException, Query, status
+from fastapi import FastAPI, Depends, HTTPException, Query, Header, Request, Response, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
-from sqlalchemy import desc, func, or_
+from sqlalchemy.orm import Session, defer
+from sqlalchemy import desc, func, or_, text
 
 from backend.app.database import get_db
 from backend.app.models import (
     User, Agency, Ticket, TicketLink, TicketMessage,
     SideConversation, SideConversationRecipient, SideConversationMessage,
-    TicketTheme, EventOutbox, AuditLog
+    TicketTheme, EventOutbox, AuditLog, IdempotencyRecord
 )
 from backend.app.schemas import (
     TicketCreateSchema, TicketAssignSchema, TicketStatusUpdateSchema,
@@ -33,7 +35,14 @@ from backend.services.routing_engine import (
 from backend.services.intent_classifier import suggest_ticket_intent
 
 import os
+import time
+import logging
+import threading
+from collections import defaultdict
 from fastapi.middleware.cors import CORSMiddleware
+
+logger = logging.getLogger("opsdesk.access")
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(
     title="OpsDesk: B2B Travel Operations Case Management API",
@@ -51,6 +60,125 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+RATE_LIMIT_PER_MINUTE = int(os.environ.get("RATE_LIMIT_PER_MINUTE", "120"))
+RATE_LIMIT_MAX_KEYS = int(os.environ.get("RATE_LIMIT_MAX_KEYS", "10000"))
+RATE_LIMIT_WINDOW = 60.0  # seconds
+
+IDEMPOTENCY_TTL_HOURS = int(os.environ.get("IDEMPOTENCY_TTL_HOURS", "24"))
+APP_ENV = os.environ.get("APP_ENV", "development").lower()
+ALLOW_DEMO_AUTH = os.environ.get("ALLOW_DEMO_AUTH", "false").lower() in ("true", "1", "yes")
+
+_rate_limit_lock = threading.Lock()
+_rate_limit_records: Dict[str, List[float]] = {}
+
+
+def validate_production_auth_settings():
+    """
+    Refuses startup when running in production environment with demo authentication,
+    unless explicitly overridden via ALLOW_DEMO_AUTH=true.
+    """
+    env = os.environ.get("APP_ENV", "development").lower()
+    allow_demo = os.environ.get("ALLOW_DEMO_AUTH", "false").lower() in ("true", "1", "yes")
+    if env == "production" and not allow_demo:
+        msg = "Refusing to start in APP_ENV=production with unauthenticated demo headers (X-User-Id) unless ALLOW_DEMO_AUTH=true is explicitly set."
+        logger.error(msg)
+        raise RuntimeError(msg)
+    elif env == "production" and allow_demo:
+        logger.warning("WARNING: APP_ENV=production is running with demo authentication because ALLOW_DEMO_AUTH=true is set. Ensure this is intentional!")
+
+
+def purge_expired_idempotency_records(db: Session) -> int:
+    """
+    Assumption: Purges in-database idempotency records older than IDEMPOTENCY_TTL_HOURS (default 24).
+    """
+    cutoff = datetime.utcnow() - timedelta(hours=IDEMPOTENCY_TTL_HOURS)
+    deleted = db.query(IdempotencyRecord).filter(IdempotencyRecord.created_at < cutoff).delete(synchronize_session=False)
+    db.commit()
+    return deleted
+
+
+@app.on_event("startup")
+def on_app_startup():
+    validate_production_auth_settings()
+    if not os.environ.get("PYTEST_CURRENT_TEST"):
+        try:
+            from backend.app.database import SessionLocal, engine, ensure_schema_migrations
+            ensure_schema_migrations(engine)
+            with SessionLocal() as db:
+                purged = purge_expired_idempotency_records(db)
+                if purged > 0:
+                    logger.info(f'{{"event": "idempotency_startup_purge", "purged": {purged}}}')
+        except Exception as exc:
+            logger.warning(f"Startup maintenance warning: {exc}")
+
+@app.middleware("http")
+async def opsdesk_protection_middleware(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+    start_time = time.time()
+
+    # Rate limiting check: Keyed on both X-User-Id and client IP
+    # NOTE: Behind a reverse proxy (e.g. Nginx, Cloudflare), request.client.host represents the proxy IP
+    # unless trusted proxy forwarding (e.g. X-Forwarded-For with CIDR verification) is configured.
+    # Status: planned trusted proxy config, not built.
+    if request.url.path not in ["/health", "/ready", "/docs", "/openapi.json"]:
+        user_id = request.headers.get("X-User-Id")
+        client_ip = request.client.host if request.client else "unknown"
+
+        keys_to_check = []
+        if user_id:
+            keys_to_check.append(f"user:{user_id}")
+        if client_ip:
+            keys_to_check.append(f"ip:{client_ip}")
+
+        now = time.time()
+        window_start = now - RATE_LIMIT_WINDOW
+
+        with _rate_limit_lock:
+            # 1. Check if any key violates limit
+            for key in keys_to_check:
+                existing = _rate_limit_records.get(key, [])
+                active = [t for t in existing if t > window_start]
+                if len(active) >= RATE_LIMIT_PER_MINUTE:
+                    _rate_limit_records[key] = active
+                    logger.warning(f'{{"event": "rate_limited", "key": "{key}", "request_id": "{request_id}", "path": "{request.url.path}"}}')
+                    resp = Response(
+                        content=json.dumps({"detail": "Rate limit exceeded. Please retry later."}),
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        media_type="application/json",
+                        headers={"Retry-After": "60", "X-Request-ID": request_id}
+                    )
+                    return resp
+
+            # 2. Bounded dict eviction: remove stale keys if size exceeds max bound
+            if len(_rate_limit_records) >= RATE_LIMIT_MAX_KEYS:
+                stale_keys = [k for k, v in _rate_limit_records.items() if not v or v[-1] <= window_start]
+                for k in stale_keys:
+                    del _rate_limit_records[k]
+                if len(_rate_limit_records) >= RATE_LIMIT_MAX_KEYS:
+                    # Drop oldest 10% of entries if still at capacity
+                    sorted_keys = sorted(_rate_limit_records.keys(), key=lambda k: _rate_limit_records[k][-1] if _rate_limit_records[k] else 0)
+                    for k in sorted_keys[: max(1, len(_rate_limit_records) // 10)]:
+                        del _rate_limit_records[k]
+
+            # 3. Append current timestamp to all applicable keys
+            for key in keys_to_check:
+                existing = _rate_limit_records.get(key, [])
+                active = [t for t in existing if t > window_start]
+                active.append(now)
+                _rate_limit_records[key] = active
+
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        duration_ms = (time.time() - start_time) * 1000
+        logger.error(f'{{"event": "request_error", "request_id": "{request_id}", "method": "{request.method}", "path": "{request.url.path}", "duration_ms": {duration_ms:.2f}, "error": "{str(exc)}"}}')
+        raise exc
+
+    duration_ms = (time.time() - start_time) * 1000
+    response.headers["X-Request-ID"] = request_id
+    logger.info(f'{{"event": "request_completed", "request_id": "{request_id}", "method": "{request.method}", "path": "{request.url.path}", "status_code": {response.status_code}, "duration_ms": {duration_ms:.2f}}}')
+    return response
 
 # Allowed status transitions graph. Any invalid transition yields 409 Conflict.
 ALLOWED_STATUS_TRANSITIONS: Dict[str, List[str]] = {
@@ -70,6 +198,19 @@ ALLOWED_STATUS_TRANSITIONS: Dict[str, List[str]] = {
 @app.get("/health")
 def health_check():
     return {"status": "healthy", "service": "opsdesk-backend"}
+
+
+@app.get("/ready")
+def readiness_check(db: Session = Depends(get_db)):
+    """Readiness probe checking database connectivity via SELECT 1."""
+    try:
+        db.execute(text("SELECT 1"))
+        return {"status": "ready", "database": "connected"}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Service unavailable: Database probe failed ({str(exc)})"
+        )
 
 
 @app.post("/api/ai/suggest-intent", response_model=IntentSuggestResponseSchema)
@@ -179,7 +320,7 @@ def list_tickets(
     # and sorting globally prior to offset/limit slicing provides exact queue prioritization without requiring database-specific
     # procedural extensions. For production scale (millions of records), queue_score is maintained via indexed column or Rust/Go scoring sidecar.
     if view in ["triage", "my_queue"]:
-        all_candidates = query.all()
+        all_candidates = query.options(defer(Ticket.description)).all()
         total_count = len(all_candidates)
 
         scored_tickets = []
@@ -229,7 +370,7 @@ def list_tickets(
 
     else:
         total_count = query.count()
-        tickets = query.offset(offset).limit(limit).all()
+        tickets = query.options(defer(Ticket.description)).offset(offset).limit(limit).all()
 
         results = []
         for t in tickets:
@@ -271,6 +412,7 @@ def list_tickets(
 @app.post("/api/tickets", status_code=status.HTTP_201_CREATED)
 def create_ticket(
     payload: TicketCreateSchema,
+    idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -281,7 +423,28 @@ def create_ticket(
     3. Contextual TBOH linking of previous cases.
     4. Tier-1 automated routing assignment.
     5. Atomic EventOutbox row emission and AuditLog.
+    6. Idempotent request deduplication via Idempotency-Key header.
     """
+    # 0. Check idempotency cache with lazy TTL expiration
+    # Assumption: In-database SQLite idempotency records are purged based on IDEMPOTENCY_TTL_HOURS (default 24h); in production 24h Redis TTL is used.
+    current_payload_hash = hashlib.sha256(payload.model_dump_json().encode("utf-8")).hexdigest()
+    if idempotency_key:
+        record_id = f"{current_user.id}:{idempotency_key}"
+        cutoff = datetime.utcnow() - timedelta(hours=IDEMPOTENCY_TTL_HOURS)
+        existing_record = db.query(IdempotencyRecord).filter(IdempotencyRecord.id == record_id).first()
+        if existing_record:
+            if existing_record.created_at and existing_record.created_at < cutoff:
+                db.delete(existing_record)
+                db.commit()
+                existing_record = None
+            else:
+                if existing_record.request_hash and existing_record.request_hash != current_payload_hash:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Conflict: Idempotency-Key was already used with a different request payload."
+                    )
+                return json.loads(existing_record.response_json)
+
     # 1. Strict agency determination
     if current_user.role == "Requester":
         resolved_agency_id = current_user.agency_id
@@ -386,9 +549,7 @@ def create_ticket(
         details={"tboh_id": payload.tboh_id, "agency_id": resolved_agency_id}
     )
 
-    db.commit()
-
-    return {
+    response_data = {
         "id": new_ticket.id,
         "tboh_id": new_ticket.tboh_id,
         "agency_id": new_ticket.agency_id,
@@ -398,6 +559,22 @@ def create_ticket(
         "intent": new_ticket.intent,
         "linked_tickets_count": len(prior_tickets)
     }
+
+    if idempotency_key:
+        record_id = f"{current_user.id}:{idempotency_key}"
+        idem_entry = IdempotencyRecord(
+            id=record_id,
+            user_id=current_user.id,
+            key=idempotency_key,
+            ticket_id=new_ticket.id,
+            response_json=json.dumps(response_data),
+            request_hash=current_payload_hash
+        )
+        db.add(idem_entry)
+
+    db.commit()
+
+    return response_data
 
 
 @app.get("/api/tickets/{ticket_id}")
@@ -500,6 +677,7 @@ def get_ticket_details(
         "linked_ticket_ids": linked_tickets,
         "messages": messages,
         "side_conversations": side_threads,
+        "version": ticket.version,
         "created_at": ticket.created_at.isoformat(),
         "updated_at": ticket.updated_at.isoformat()
     }
@@ -516,7 +694,7 @@ def assign_ticket(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Assigns an operations ticket to a designated staff member."""
+    """Assigns an operations ticket to a designated staff member atomically with race protection."""
     if current_user.role == "Requester":
         raise HTTPException(status_code=403, detail="Forbidden: Requesters cannot assign tickets")
 
@@ -529,10 +707,34 @@ def assign_ticket(
         raise HTTPException(status_code=400, detail="Target agent must be internal staff")
 
     old_agent = ticket.assigned_to
-    ticket.assigned_to = payload.agent_id
-    if ticket.status == "New":
-        ticket.status = "Open"
-    ticket.updated_at = datetime.utcnow()
+    current_version = ticket.version
+
+    filter_conditions = [
+        Ticket.id == ticket_id,
+        Ticket.version == current_version
+    ]
+    if old_agent is None:
+        filter_conditions.append(Ticket.assigned_to.is_(None))
+    else:
+        filter_conditions.append(Ticket.assigned_to == old_agent)
+
+    new_status = "Open" if ticket.status == "New" else ticket.status
+    now = datetime.utcnow()
+    rowcount = db.query(Ticket).filter(*filter_conditions).update(
+        {
+            Ticket.assigned_to: payload.agent_id,
+            Ticket.status: new_status,
+            Ticket.version: current_version + 1,
+            Ticket.updated_at: now
+        },
+        synchronize_session=False
+    )
+    if rowcount == 0:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Conflict: Ticket assignment race lost; ticket was claimed or modified by another agent."
+        )
 
     emit_outbox_event(
         db=db,
@@ -551,7 +753,7 @@ def assign_ticket(
     )
     db.commit()
 
-    return {"status": "success", "ticket_id": ticket.id, "assigned_to": ticket.assigned_to}
+    return {"status": "success", "ticket_id": ticket.id, "assigned_to": payload.agent_id, "version": current_version + 1}
 
 
 @app.post("/api/tickets/{ticket_id}/unassign")
@@ -560,7 +762,7 @@ def unassign_ticket(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Unassigns ticket returning it to triage."""
+    """Unassigns ticket returning it to triage atomically."""
     if current_user.role == "Requester":
         raise HTTPException(status_code=403, detail="Forbidden: Requesters cannot unassign tickets")
 
@@ -569,8 +771,26 @@ def unassign_ticket(
         raise HTTPException(status_code=404, detail="Ticket not found")
 
     old_agent = ticket.assigned_to
-    ticket.assigned_to = None
-    ticket.updated_at = datetime.utcnow()
+    current_version = ticket.version
+
+    rowcount = db.query(Ticket).filter(
+        Ticket.id == ticket_id,
+        Ticket.version == current_version
+    ).update(
+        {
+            Ticket.assigned_to: None,
+            Ticket.status: "Open" if ticket.status in ["New", "Open"] else ticket.status,
+            Ticket.version: current_version + 1,
+            Ticket.updated_at: datetime.utcnow()
+        },
+        synchronize_session=False
+    )
+    if rowcount == 0:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Conflict: Concurrent modification detected during unassignment."
+        )
 
     emit_outbox_event(
         db=db,
@@ -589,7 +809,7 @@ def unassign_ticket(
     )
     db.commit()
 
-    return {"status": "success", "ticket_id": ticket.id, "assigned_to": None}
+    return {"status": "success", "ticket_id": ticket.id, "assigned_to": None, "version": current_version + 1}
 
 
 @app.post("/api/tickets/{ticket_id}/status")
@@ -602,7 +822,7 @@ def update_ticket_status(
     """
     Transitions ticket status according to ALLOWED_STATUS_TRANSITIONS graph.
     Status transitions are restricted strictly to internal operations staff (Requesters get 403).
-    Returns 409 Conflict if transition is not permitted.
+    Returns 409 Conflict if transition is not permitted or if stale version detected.
     """
     if current_user.role == "Requester":
         raise HTTPException(
@@ -614,6 +834,12 @@ def update_ticket_status(
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
 
+    if payload.version is not None and ticket.version != payload.version:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Conflict: Stale write. Ticket is at version {ticket.version}, expected {payload.version}."
+        )
+
     allowed = ALLOWED_STATUS_TRANSITIONS.get(ticket.status, [])
     if payload.status not in allowed:
         raise HTTPException(
@@ -622,8 +848,25 @@ def update_ticket_status(
         )
 
     old_status = ticket.status
-    ticket.status = payload.status
-    ticket.updated_at = datetime.utcnow()
+    current_version = ticket.version
+
+    rowcount = db.query(Ticket).filter(
+        Ticket.id == ticket_id,
+        Ticket.version == current_version
+    ).update(
+        {
+            Ticket.status: payload.status,
+            Ticket.version: current_version + 1,
+            Ticket.updated_at: datetime.utcnow()
+        },
+        synchronize_session=False
+    )
+    if rowcount == 0:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Conflict: Concurrent modification detected during status update."
+        )
 
     emit_outbox_event(
         db=db,
@@ -631,18 +874,18 @@ def update_ticket_status(
         ticket_id=ticket.id,
         agency_id=ticket.agency_id,
         visibility="public",
-        payload={"ticket_id": ticket.id, "old_status": old_status, "new_status": ticket.status}
+        payload={"ticket_id": ticket.id, "old_status": old_status, "new_status": payload.status}
     )
     record_audit_log(
         db=db,
         ticket_id=ticket.id,
         actor_id=current_user.id,
         action="ticket.status_changed",
-        details={"old_status": old_status, "new_status": ticket.status}
+        details={"old_status": old_status, "new_status": payload.status}
     )
     db.commit()
 
-    return {"status": "success", "ticket_id": ticket.id, "old_status": old_status, "new_status": ticket.status}
+    return {"status": "success", "ticket_id": ticket.id, "old_status": old_status, "new_status": payload.status, "version": current_version + 1}
 
 
 @app.post("/api/tickets/{ticket_id}/escalate")
@@ -657,7 +900,7 @@ def escalate_ticket(
     - Sets status to 'Escalated'
     - Reassigns ticket to configured Escalation Manager (DEFAULT_ESCALATION_MANAGER_ID)
     - Records reason in audit log.
-    - Public outbox payload excludes internal free-text reason to prevent operational leakage.
+    - Protected with optimistic version checking.
     """
     if current_user.role == "Requester":
         raise HTTPException(status_code=403, detail="Forbidden: Requesters cannot escalate tickets directly")
@@ -665,6 +908,12 @@ def escalate_ticket(
     ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
+
+    if payload.version is not None and ticket.version != payload.version:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Conflict: Stale write. Ticket is at version {ticket.version}, expected {payload.version}."
+        )
 
     allowed = ALLOWED_STATUS_TRANSITIONS.get(ticket.status, [])
     if "Escalated" not in allowed and ticket.status != "Escalated":
@@ -675,11 +924,28 @@ def escalate_ticket(
 
     old_status = ticket.status
     old_assignee = ticket.assigned_to
+    current_version = ticket.version
+    routing_reason = f"Escalated to Escalation Manager ({DEFAULT_ESCALATION_MANAGER_ID})"
 
-    ticket.status = "Escalated"
-    ticket.assigned_to = DEFAULT_ESCALATION_MANAGER_ID
-    ticket.routing_reason = f"Escalated to Escalation Manager ({DEFAULT_ESCALATION_MANAGER_ID})"
-    ticket.updated_at = datetime.utcnow()
+    rowcount = db.query(Ticket).filter(
+        Ticket.id == ticket_id,
+        Ticket.version == current_version
+    ).update(
+        {
+            Ticket.status: "Escalated",
+            Ticket.assigned_to: DEFAULT_ESCALATION_MANAGER_ID,
+            Ticket.routing_reason: routing_reason,
+            Ticket.version: current_version + 1,
+            Ticket.updated_at: datetime.utcnow()
+        },
+        synchronize_session=False
+    )
+    if rowcount == 0:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Conflict: Concurrent modification detected during escalation."
+        )
 
     # Public event payload omits free-text reason to protect internal operational discussions
     emit_outbox_event(
@@ -708,7 +974,8 @@ def escalate_ticket(
         "ticket_id": ticket.id,
         "new_status": "Escalated",
         "assigned_to": DEFAULT_ESCALATION_MANAGER_ID,
-        "routing_reason": ticket.routing_reason
+        "routing_reason": routing_reason,
+        "version": current_version + 1
     }
 
 
@@ -738,9 +1005,34 @@ def transfer_ticket(
         raise HTTPException(status_code=400, detail="Target agent must be internal staff")
 
     old_agent = ticket.assigned_to
-    ticket.assigned_to = payload.target_agent_id
-    ticket.routing_reason = f"Transferred from {old_agent} to {payload.target_agent_id}"
-    ticket.updated_at = datetime.utcnow()
+    current_version = ticket.version
+
+    if payload.version is not None and ticket.version != payload.version:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Conflict: Stale write. Ticket is at version {ticket.version}, expected {payload.version}."
+        )
+
+    routing_reason = f"Transferred from {old_agent} to {payload.target_agent_id}"
+
+    rowcount = db.query(Ticket).filter(
+        Ticket.id == ticket_id,
+        Ticket.version == current_version
+    ).update(
+        {
+            Ticket.assigned_to: payload.target_agent_id,
+            Ticket.routing_reason: routing_reason,
+            Ticket.version: current_version + 1,
+            Ticket.updated_at: datetime.utcnow()
+        },
+        synchronize_session=False
+    )
+    if rowcount == 0:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Conflict: Concurrent modification detected during transfer."
+        )
 
     # Verify side conversations are preserved
     side_convo_count = len(ticket.side_conversations)
@@ -771,10 +1063,11 @@ def transfer_ticket(
     return {
         "status": "success",
         "ticket_id": ticket.id,
-        "assigned_to": ticket.assigned_to,
-        "routing_reason": ticket.routing_reason,
+        "assigned_to": payload.target_agent_id,
+        "routing_reason": routing_reason,
         "side_conversations_preserved": side_convo_count,
-        "total_recipients_preserved": recipients_count
+        "total_recipients_preserved": recipients_count,
+        "version": current_version + 1
     }
 
 
@@ -1123,6 +1416,24 @@ def get_top_themes(
 # 13. UNCAPPED OPS DATA EXPORT (MVP-6)
 # ============================================================================
 
+def sanitize_csv_cell(val: Any) -> str:
+    """
+    Prevents CSV formula injection / CSV spreadsheet execution vulnerabilities.
+    If a cell value begins with '=', '+', '-', '@', '\t', or '\r', prefixes with a single quote.
+    """
+    if val is None:
+        return ""
+    s = str(val)
+    if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return f"'{s}"
+    return s
+
+
+CSV_EXPORT_MAX_CONCURRENCY = int(os.environ.get("CSV_EXPORT_MAX_CONCURRENCY", "2"))
+CSV_EXPORT_MAX_DURATION_SECONDS = float(os.environ.get("CSV_EXPORT_MAX_DURATION_SECONDS", "30.0"))
+_export_semaphore = threading.BoundedSemaphore(CSV_EXPORT_MAX_CONCURRENCY)
+
+
 @app.get("/api/export/tickets.csv")
 def export_tickets_csv(
     status: Optional[str] = None,
@@ -1135,9 +1446,19 @@ def export_tickets_csv(
     """
     Uncapped CSV data streaming export for ops beyond 3K-row UX barrier (MVP-6).
     Restricted strictly to Lead role. Memory-safe streaming via generator yield_per.
+    Applies formula injection sanitization to protect operations spreadsheets.
+    Protected by concurrency limiter (max CSV_EXPORT_MAX_CONCURRENCY, default 2).
     """
     if current_user.role != "Lead":
         raise HTTPException(status_code=403, detail="Forbidden: Export is restricted to Lead role")
+
+    acquired = _export_semaphore.acquire(blocking=False)
+    if not acquired:
+        raise HTTPException(
+            status_code=503,
+            detail="Export service busy: maximum concurrent exports reached. Please retry shortly.",
+            headers={"Retry-After": "10"}
+        )
 
     query = db.query(Ticket)
     if status:
@@ -1152,36 +1473,48 @@ def export_tickets_csv(
     query = query.order_by(Ticket.created_at.desc())
 
     def iter_csv():
-        output = io.StringIO()
-        writer = csv.writer(output)
+        start_time = time.time()
+        try:
+            output = io.StringIO()
+            writer = csv.writer(output)
 
-        # Write header
-        writer.writerow([
-            "id", "tboh_id", "agency_id", "title", "intent", "priority",
-            "status", "check_in_date", "lcd_date", "assigned_to", "created_at"
-        ])
-        yield output.getvalue()
-        output.seek(0)
-        output.truncate(0)
-
-        # Stream rows in chunks of 500 without loading all rows into RAM
-        for ticket in query.yield_per(500):
+            # Write header
             writer.writerow([
-                ticket.id,
-                ticket.tboh_id,
-                ticket.agency_id,
-                ticket.title,
-                ticket.intent or "",
-                ticket.priority,
-                ticket.status,
-                ticket.check_in_date.isoformat() if ticket.check_in_date else "",
-                ticket.lcd_date.isoformat() if ticket.lcd_date else "",
-                ticket.assigned_to or "",
-                ticket.created_at.isoformat() if ticket.created_at else ""
+                "id", "tboh_id", "agency_id", "title", "intent", "priority",
+                "status", "check_in_date", "lcd_date", "assigned_to", "created_at"
             ])
             yield output.getvalue()
             output.seek(0)
             output.truncate(0)
+
+            # Stream rows in chunks of 500 without loading all rows into RAM
+            for ticket in query.yield_per(500):
+                if time.time() - start_time > CSV_EXPORT_MAX_DURATION_SECONDS:
+                    writer.writerow(["# [ABORTED: Export exceeded maximum duration limit]"])
+                    yield output.getvalue()
+                    break
+
+                writer.writerow([
+                    sanitize_csv_cell(ticket.id),
+                    sanitize_csv_cell(ticket.tboh_id),
+                    sanitize_csv_cell(ticket.agency_id),
+                    sanitize_csv_cell(ticket.title),
+                    sanitize_csv_cell(ticket.intent or ""),
+                    sanitize_csv_cell(ticket.priority),
+                    sanitize_csv_cell(ticket.status),
+                    sanitize_csv_cell(ticket.check_in_date.isoformat() if ticket.check_in_date else ""),
+                    sanitize_csv_cell(ticket.lcd_date.isoformat() if ticket.lcd_date else ""),
+                    sanitize_csv_cell(ticket.assigned_to or ""),
+                    sanitize_csv_cell(ticket.created_at.isoformat() if ticket.created_at else "")
+                ])
+                yield output.getvalue()
+                output.seek(0)
+                output.truncate(0)
+        finally:
+            try:
+                _export_semaphore.release()
+            except ValueError:
+                pass
 
     headers = {
         "Content-Disposition": "attachment; filename=opsdesk_tickets_export.csv",

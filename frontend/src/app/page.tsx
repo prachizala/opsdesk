@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useUser } from "@/context/UserContext";
 import { useToast } from "@/context/ToastContext";
 import { fetchTickets, getExportUrl } from "@/lib/api";
@@ -73,10 +73,22 @@ export default function QueuePage() {
     setPage(0);
   }, [currentUser.id, isRequester]);
 
-  // Load Queue Data
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  // Resilient polling refs & AbortController (M4 load hardening)
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const backoffDelayRef = useRef<number>(5000);
+  const timerIdRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Load Queue Data with signal and background polling support
+  const loadData = useCallback(async (isBackgroundPoll = false) => {
+    if (!isBackgroundPoll) {
+      setLoading(true);
+    }
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       const viewParam = isRequester
         ? activeTab === "my_agency"
@@ -92,7 +104,8 @@ export default function QueuePage() {
         intentFilter || undefined,
         debouncedSearch || undefined,
         priorityFilter || undefined,
-        statusFilter || undefined
+        statusFilter || undefined,
+        controller.signal
       );
 
       let fetchedTickets = res.tickets || [];
@@ -111,10 +124,19 @@ export default function QueuePage() {
 
       setTickets(fetchedTickets);
       setTotalCount(res.total || 0);
+      setError(null);
+      backoffDelayRef.current = 5000;
+      return true;
     } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        return false;
+      }
       setError(err instanceof Error ? err.message : "Failed to load operations queue");
+      return false;
     } finally {
-      setLoading(false);
+      if (!isBackgroundPoll) {
+        setLoading(false);
+      }
     }
   }, [
     activeTab,
@@ -127,12 +149,78 @@ export default function QueuePage() {
     statusFilter,
     atRiskOnly,
     unassignedOnly,
+    pageSize,
   ]);
 
+  // Load on change and resilient poll with jitter, visibilitychange pause, and exponential backoff
   useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 30000);
-    return () => clearInterval(interval);
+    let isCancelled = false;
+
+    const scheduleNextPoll = (isError = false) => {
+      if (timerIdRef.current) {
+        clearTimeout(timerIdRef.current);
+      }
+      if (typeof document !== "undefined" && document.hidden) {
+        return;
+      }
+
+      let delay: number;
+      if (isError) {
+        delay = backoffDelayRef.current;
+        backoffDelayRef.current = Math.min(backoffDelayRef.current * 2, 60000);
+      } else {
+        const jitter = (Math.random() * 6000) - 3000;
+        delay = Math.max(10000, 30000 + jitter);
+      }
+
+      timerIdRef.current = setTimeout(async () => {
+        if (isCancelled || (typeof document !== "undefined" && document.hidden)) return;
+        const success = await loadData(true);
+        if (!isCancelled) {
+          scheduleNextPoll(!success);
+        }
+      }, delay);
+    };
+
+    loadData(false).then((success) => {
+      if (!isCancelled) {
+        scheduleNextPoll(!success);
+      }
+    });
+
+    const handleVisibility = () => {
+      if (typeof document !== "undefined" && !document.hidden) {
+        loadData(true).then((success) => {
+          if (!isCancelled) {
+            scheduleNextPoll(!success);
+          }
+        });
+      } else {
+        if (timerIdRef.current) {
+          clearTimeout(timerIdRef.current);
+        }
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+        }
+      }
+    };
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibility);
+    }
+
+    return () => {
+      isCancelled = true;
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibility);
+      }
+      if (timerIdRef.current) {
+        clearTimeout(timerIdRef.current);
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, [loadData]);
 
   // Clear filters

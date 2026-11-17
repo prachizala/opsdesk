@@ -70,8 +70,8 @@ def seed_database(db: Session, engine_bind=None, total_tickets: int = 5000, drop
 
     print("Creating agencies...")
     agencies = [
-        Agency(id="AGY-001", name="Krypton Voyages B2B", country_code="AE", tier="Premium"),
-        Agency(id="AGY-002", name="Vectora Travel", country_code="IN", tier="Standard"),
+        Agency(id="AGY-001", name="Demo Agency A (fictional)", country_code="AE", tier="Premium"),
+        Agency(id="AGY-002", name="Demo Agency B (fictional)", country_code="IN", tier="Standard"),
         Agency(id="AGY-003", name="Aethelgard Holidays", country_code="UK", tier="Premium")
     ]
     db.add_all(agencies)
@@ -314,10 +314,16 @@ def seed_database(db: Session, engine_bind=None, total_tickets: int = 5000, drop
     priorities = ["Low", "Medium", "High", "Urgent"]
 
     synthetic_count = total_tickets - len(fixture_tickets)
-    historical_count = 3500
-    escalated_count = 40
-    at_risk_synthetic_count = 78
-    normal_active_count = synthetic_count - historical_count - escalated_count - at_risk_synthetic_count
+    if total_tickets < 500:
+        historical_count = int(synthetic_count * 0.70)
+        escalated_count = max(1, int(synthetic_count * 0.01))
+        at_risk_synthetic_count = max(1, int(synthetic_count * 0.02))
+        normal_active_count = max(0, synthetic_count - historical_count - escalated_count - at_risk_synthetic_count)
+    else:
+        historical_count = 3500
+        escalated_count = 40
+        at_risk_synthetic_count = 78
+        normal_active_count = synthetic_count - historical_count - escalated_count - at_risk_synthetic_count
 
     categories = (
         ["historical"] * historical_count +

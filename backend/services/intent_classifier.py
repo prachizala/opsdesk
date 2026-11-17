@@ -68,18 +68,36 @@ def suggest_ticket_intent(subject: str, body: str) -> Tuple[str, str]:
         if pattern.search(text):
             return intent_name, "regex_rule"
 
-    # Step 2: Fallback to Gemini structured call via google-genai SDK
+    # Step 2: Fallback to Gemini structured call via google-genai SDK with strict timeout
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+    timeout_sec = float(os.getenv("GEMINI_TIMEOUT_SECONDS", "3.0"))
 
     if not api_key:
         return "Unclassified", "fallback_unclassified"
 
-    try:
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+
+    def _call_gemini():
         from google import genai
         from google.genai import types
 
-        client = genai.Client(api_key=api_key)
+        # Pass timeout directly into SDK client HTTP options (in milliseconds)
+        timeout_ms = int(timeout_sec * 1000)
+        http_opts = None
+        if hasattr(types, "HttpOptions"):
+            try:
+                http_opts = types.HttpOptions(timeout=timeout_ms)
+            except Exception:
+                http_opts = {"timeout": timeout_ms}
+        else:
+            http_opts = {"timeout": timeout_ms}
+
+        try:
+            client = genai.Client(api_key=api_key, http_options=http_opts)
+        except Exception:
+            client = genai.Client(api_key=api_key)
+
         prompt = f"""
         Analyze this B2B travel support message and suggest the single best matching category from this taxonomy:
         {INTENT_TAXONOMY[:-1]}
@@ -96,8 +114,14 @@ def suggest_ticket_intent(subject: str, body: str) -> Tuple[str, str]:
             contents=prompt,
             config=types.GenerateContentConfig(response_mime_type="application/json")
         )
+        return response.text
 
-        data = json.loads(response.text)
+    executor = ThreadPoolExecutor(max_workers=1)
+    try:
+        future = executor.submit(_call_gemini)
+        response_text = future.result(timeout=timeout_sec)
+
+        data = json.loads(response_text)
         confidence = float(data.get("confidence", 0.0))
         suggested = data.get("suggested_intent", "")
 
@@ -108,5 +132,10 @@ def suggest_ticket_intent(subject: str, body: str) -> Tuple[str, str]:
         return "Unclassified", "fallback_unclassified"
 
     except Exception:
-        # On any API error, network failure, or parsing error, return Unclassified
+        # On any API error, timeout, network failure, or parsing error, return fallback
         return "Unclassified", "fallback_unclassified"
+    finally:
+        try:
+            executor.shutdown(wait=False, cancel_futures=True)
+        except Exception:
+            pass
