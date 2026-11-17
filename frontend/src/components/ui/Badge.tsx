@@ -2,6 +2,7 @@
 
 import React from "react";
 import { cn } from "@/lib/utils";
+import { PriorityMark, PriorityChip, PriorityBadge } from "./PriorityMark";
 
 export interface ChipProps extends React.HTMLAttributes<HTMLSpanElement> {
   variant?: "default" | "brand" | "outline" | "subtle";
@@ -9,6 +10,9 @@ export interface ChipProps extends React.HTMLAttributes<HTMLSpanElement> {
   icon?: React.ReactNode;
 }
 
+/**
+ * Chip: Pill language (fully rounded, 20-22px height, 12px text, soft tint, no border).
+ */
 export function Chip({
   className,
   variant = "default",
@@ -18,13 +22,13 @@ export function Chip({
   ...props
 }: ChipProps) {
   const sizeStyles = {
-    sm: "h-[22px] px-2 text-[12px]",
-    md: "h-6 px-2.5 text-body",
+    sm: "h-[22px] px-2.5 text-[12px]",
+    md: "h-6 px-3 text-body",
   };
 
   const variantStyles = {
     default: "bg-surface-subtle text-content-secondary",
-    brand: "bg-brand-50 text-brand-700 font-medium",
+    brand: "bg-brand-50 text-brand-orange-text dark:text-brand-orange font-medium",
     subtle: "bg-surface-subtle text-content-tertiary",
     outline: "bg-transparent text-content-primary border border-border",
   };
@@ -32,7 +36,7 @@ export function Chip({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-chip font-medium tracking-tight shrink-0 select-none leading-none",
+        "inline-flex items-center gap-1.5 rounded-full font-medium tracking-tight shrink-0 select-none leading-none",
         sizeStyles[size],
         variantStyles[variant],
         className
@@ -45,37 +49,14 @@ export function Chip({
   );
 }
 
-export interface PriorityChipProps {
-  priority: "Urgent" | "High" | "Medium" | "Low" | string;
-  className?: string;
-}
-
-export function PriorityChip({ priority, className }: PriorityChipProps) {
-  const styles: Record<string, string> = {
-    Urgent: "bg-priority-urgent-bg text-priority-urgent-text font-semibold",
-    High: "bg-priority-high-bg text-priority-high-text font-medium",
-    Medium: "bg-priority-medium-bg text-priority-medium-text font-medium",
-    Low: "bg-priority-low-bg text-priority-low-text font-normal",
-  };
-
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center h-[22px] px-2 rounded-chip text-[12px] font-medium leading-none shrink-0 select-none",
-        styles[priority] || styles.Low,
-        className
-      )}
-    >
-      {priority}
-    </span>
-  );
-}
-
 export interface StatusChipProps {
   status: "New" | "Open" | "Pending" | "Escalated" | "Resolved" | "Closed" | string;
   className?: string;
 }
 
+/**
+ * StatusChip: Soft tint, no border, pill shape.
+ */
 export function StatusChip({ status, className }: StatusChipProps) {
   const styles: Record<string, string> = {
     New: "bg-status-new-bg text-status-new-text font-medium",
@@ -89,7 +70,7 @@ export function StatusChip({ status, className }: StatusChipProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center h-[22px] px-2 rounded-chip text-[12px] font-medium leading-none shrink-0 select-none",
+        "inline-flex items-center h-[22px] px-2.5 rounded-full text-[12px] font-medium leading-none shrink-0 select-none",
         styles[status] || styles.Closed,
         className
       )}
@@ -104,6 +85,9 @@ export interface RegionTagProps {
   className?: string;
 }
 
+/**
+ * RegionTag: Muted four hues (MEA, APAC, EU, AMER), pill shape.
+ */
 export function RegionTag({ region, className }: RegionTagProps) {
   const normalized = region.toUpperCase();
   const styles: Record<string, string> = {
@@ -116,7 +100,7 @@ export function RegionTag({ region, className }: RegionTagProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center h-[22px] px-2 rounded-chip text-[12px] font-semibold font-mono-numbers leading-none shrink-0 select-none tracking-wide",
+        "inline-flex items-center h-[22px] px-2.5 rounded-full text-[12px] font-semibold font-mono-numbers leading-none shrink-0 select-none tracking-wide",
         styles[normalized] || "bg-surface-subtle text-content-secondary",
         className
       )}
@@ -126,39 +110,7 @@ export function RegionTag({ region, className }: RegionTagProps) {
   );
 }
 
-export interface PriorityMarkProps {
-  priority: "Urgent" | "High" | "Medium" | "Low" | string;
-  className?: string;
-  showLabel?: boolean;
-}
-
-export function PriorityMark({ priority, className, showLabel = true }: PriorityMarkProps) {
-  // Neutral-to-warm tones (never loud red, red is reserved for Breached)
-  const configs: Record<string, { dot: string; bg: string; text: string }> = {
-    Urgent: { dot: "bg-amber-600", bg: "bg-amber-50", text: "text-amber-800" },
-    High: { dot: "bg-orange-500", bg: "bg-orange-50", text: "text-orange-800" },
-    Medium: { dot: "bg-blue-500", bg: "bg-blue-50", text: "text-blue-800" },
-    Low: { dot: "bg-slate-400", bg: "bg-slate-100", text: "text-slate-700" },
-  };
-
-  const current = configs[priority] || configs.Low;
-
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 h-[22px] px-2 rounded-chip text-[12px] font-medium leading-none shrink-0 select-none",
-        current.bg,
-        current.text,
-        className
-      )}
-    >
-      <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", current.dot)} />
-      {showLabel && <span>{priority}</span>}
-    </span>
-  );
-}
-
-// Aliases for backward compatibility
+// Re-exports
+export { PriorityMark, PriorityChip, PriorityBadge };
 export const Badge = Chip;
-export const PriorityBadge = PriorityChip;
 export const StatusBadge = StatusChip;

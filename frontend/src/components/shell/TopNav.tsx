@@ -6,10 +6,15 @@ import { useRouter } from "next/navigation";
 import { useUser } from "@/context/UserContext";
 import { DEMO_USERS, DemoUser } from "@/lib/types";
 import { Avatar } from "@/components/ui/Avatar";
+import { RegionTag } from "@/components/ui/Badge";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { Search, ChevronDown, Check, ShieldAlert, X, AlertCircle, RefreshCw, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export function LogoMark({ className = "w-6 h-6" }: { className?: string }) {
+/**
+ * Geometric 'O' logo mark with flight-path arc SVG
+ */
+export function LogoMark({ className = "w-7 h-7" }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 32 32"
@@ -18,12 +23,12 @@ export function LogoMark({ className = "w-6 h-6" }: { className?: string }) {
       className={className}
       aria-hidden="true"
     >
-      {/* Geometric 'O' ring in brand teal */}
-      <circle cx="16" cy="16" r="11" stroke="#0E9AA7" strokeWidth="2.5" />
+      {/* Geometric 'O' ring in brand orange */}
+      <circle cx="16" cy="16" r="11" stroke="#EA580C" strokeWidth="2.5" />
       {/* Flight path arc crossing the ring */}
       <path
         d="M 6 22 C 12 18, 18 10, 26 6"
-        stroke="#CFFAFE"
+        stroke="#FB923C"
         strokeWidth="2.5"
         strokeLinecap="round"
       />
@@ -82,7 +87,9 @@ export function TopNav() {
     return false;
   });
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
+  const [isHoverCardOpen, setIsHoverCardOpen] = useState<boolean>(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const hoverCardTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [globalSearch, setGlobalSearch] = useState<string>("");
   const [isSearchFocused, setIsSearchFocused] = useState<boolean>(false);
@@ -155,20 +162,31 @@ export function TopNav() {
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setIsDropdownOpen(false);
+        setIsHoverCardOpen(false);
       }
     };
-    if (isDropdownOpen) {
+    if (isDropdownOpen || isHoverCardOpen) {
       document.addEventListener("mousedown", handleClickOutside);
     }
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isDropdownOpen]);
+  }, [isDropdownOpen, isHoverCardOpen]);
 
-  // Dismiss demo banner for current session
   const handleDismissBanner = () => {
     setIsBannerDismissed(true);
     if (typeof window !== "undefined") {
       sessionStorage.setItem("opsdesk_demo_banner_dismissed", "true");
     }
+  };
+
+  const handleMouseEnterRole = () => {
+    if (hoverCardTimeoutRef.current) clearTimeout(hoverCardTimeoutRef.current);
+    setIsHoverCardOpen(true);
+  };
+
+  const handleMouseLeaveRole = () => {
+    hoverCardTimeoutRef.current = setTimeout(() => {
+      setIsHoverCardOpen(false);
+    }, 250);
   };
 
   const currentRoleInfo = ROLE_PERMISSIONS[currentUser.role] || {
@@ -177,24 +195,24 @@ export function TopNav() {
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-chrome-navy-900 border-b border-[#16384C] text-chrome-text shadow-sm select-none">
+    <header className="sticky top-0 z-40 w-full pt-3 px-3 sm:px-6 select-none pointer-events-none transition-subtle">
       {/* 1. API Unreachable Error State Banner */}
       {isApiDown && (
         <div
           role="alert"
           aria-live="assertive"
-          className="bg-red-950/90 border-b border-red-800/80 min-h-9 px-4 py-1.5 text-caption text-red-200 flex items-center justify-between transition-subtle w-full z-50"
+          className="pointer-events-auto max-w-[1440px] mx-auto mb-2 bg-red-950/90 border border-red-800/80 rounded-full min-h-9 px-4 py-1 text-caption text-red-200 flex items-center justify-between transition-subtle shadow-md"
         >
           <div className="flex items-center gap-2 mx-auto flex-wrap justify-center">
             <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-            <span className="font-medium">
+            <span className="font-medium text-[12px]">
               Can&apos;t reach the server. Retrying in {retryingIn}s...
             </span>
             <button
               type="button"
               onClick={checkApiHealth}
               disabled={isRetrying}
-              className="underline font-semibold hover:text-white ml-2 cursor-pointer disabled:opacity-50 inline-flex items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 rounded px-1.5 py-0.5 min-h-[32px]"
+              className="underline font-semibold hover:text-white ml-2 cursor-pointer disabled:opacity-50 inline-flex items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 rounded-full px-2 py-0.5 text-[11px]"
             >
               <RefreshCw className={cn("w-3 h-3", isRetrying && "animate-spin")} />
               Retry now
@@ -203,48 +221,46 @@ export function TopNav() {
         </div>
       )}
 
-      {/* 2. Slim amber demo-auth banner (32px, dismissible per session) */}
+      {/* 2. Slim demo-auth banner (32px, dismissible per session) */}
       {!isBannerDismissed && !isApiDown && (
-        <div className="bg-[#FEF3C7] border-b border-[#FDE68A] h-8 px-4 text-caption text-[#92400E] flex items-center justify-between transition-subtle font-medium">
+        <div className="pointer-events-auto max-w-[1440px] mx-auto mb-2 bg-amber-500/10 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-700/50 rounded-full h-8 px-4 text-[12px] text-amber-800 dark:text-amber-300 flex items-center justify-between transition-subtle font-medium shadow-xs">
           <div className="flex items-center gap-2 mx-auto">
-            <ShieldAlert className="w-3.5 h-3.5 text-[#B45309] shrink-0" />
-            <span>
-              Demo authentication — identity is client-supplied and not secure.
-            </span>
+            <ShieldAlert className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span>Demo authentication — identity is client-supplied and not secure.</span>
           </div>
           <button
             type="button"
             onClick={handleDismissBanner}
             aria-label="Dismiss demo authentication banner"
-            className="text-[#B45309] hover:text-[#78350F] p-1 rounded-input transition-subtle cursor-pointer shrink-0"
+            className="text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 p-1 rounded-full transition-subtle cursor-pointer shrink-0"
           >
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
 
-      {/* 3. Main 56px Top Bar */}
-      <div className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
-        {/* Left: Geometric flight-path 'O' logo mark SVG + 'OpsDesk' */}
-        <div className="flex items-center gap-6">
+      {/* 3. Floating Pill Top Bar (surface, fully rounded, shadow sm, 12-16px margin from edges, sticky) */}
+      <div className="pointer-events-auto w-full max-w-[1440px] mx-auto h-14 bg-surface/95 backdrop-blur-md border border-border rounded-full shadow-sm px-4 sm:px-6 flex items-center justify-between gap-4 transition-subtle">
+        {/* Left: Geometric flight-path 'O' logo mark + 'OpsDesk' */}
+        <div className="flex items-center gap-3 shrink-0">
           <Link
             href="/"
-            className="flex items-center gap-2.5 text-white hover:opacity-95 transition-subtle focus-visible:outline-brand-500 rounded-input min-h-[44px] min-w-[44px]"
+            className="flex items-center gap-2.5 text-content-primary hover:opacity-90 transition-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring rounded-full min-h-[40px]"
             aria-label="OpsDesk Home"
           >
             <LogoMark className="w-7 h-7 shrink-0" />
             <div className="flex items-center gap-2">
-              <span className="font-heading font-semibold text-section tracking-tight text-white">
+              <span className="font-heading font-bold text-section tracking-tight text-content-primary">
                 OpsDesk
               </span>
-              <span className="hidden sm:inline-block text-[10px] font-mono-numbers font-medium uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-[#12303F] text-departure-amber border border-[#1E455A]">
+              <span className="hidden sm:inline-block text-[10px] font-mono-numbers font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-surface-subtle text-brand-orange-text dark:text-brand-orange border border-border">
                 CONTROL TOWER
               </span>
             </div>
           </Link>
         </div>
 
-        {/* Center: Global Search Bar (Ctrl+K Focus Trigger with glow & expand) */}
+        {/* Center: Global Search Pill with Ctrl+K hint */}
         <div className="flex-1 max-w-md mx-auto hidden sm:block">
           <form
             onSubmit={(e) => {
@@ -257,8 +273,8 @@ export function TopNav() {
           >
             <Search
               className={cn(
-                "w-4 h-4 absolute left-3 pointer-events-none transition-colors duration-120",
-                isSearchFocused ? "text-brand-500" : "text-chrome-muted"
+                "w-4 h-4 absolute left-3.5 pointer-events-none transition-colors duration-120",
+                isSearchFocused ? "text-brand-orange" : "text-content-tertiary"
               )}
             />
             <input
@@ -273,105 +289,141 @@ export function TopNav() {
                   searchInputRef.current?.blur();
                 }
               }}
-              placeholder="Search tickets, bookings, tags... (Ctrl+K)"
+              placeholder="Search tickets, PNR, TBOH... (Ctrl+K)"
               aria-label="Search tickets and bookings (Ctrl+K)"
               className={cn(
-                "w-full h-9 pl-9 pr-16 rounded-input bg-chrome-navy-800 text-caption text-chrome-text placeholder:text-chrome-muted border border-[#1A3D52] hover:border-brand-500/60 focus:border-brand-500 focus:bg-[#0E2736] focus:outline-none transition-all duration-120",
-                isSearchFocused && "shadow-glow max-w-lg"
+                "w-full h-9 pl-9 pr-16 rounded-full bg-surface-subtle text-caption text-content-primary placeholder:text-content-disabled border border-border hover:border-border-strong focus:border-brand-orange focus:bg-surface focus:outline-none transition-all duration-120",
+                isSearchFocused && "ring-2 ring-focus-ring shadow-sm max-w-lg"
               )}
             />
-            <kbd className="absolute right-2.5 font-mono-numbers text-[10px] bg-chrome-navy-900 text-chrome-muted px-1.5 py-0.5 rounded border border-[#1D445C] pointer-events-none select-none">
+            <kbd className="absolute right-3 font-mono-numbers text-[10px] bg-surface text-content-tertiary px-1.5 py-0.5 rounded-full border border-border pointer-events-none select-none">
               Ctrl+K
             </kbd>
           </form>
         </div>
 
-        {/* Right: Role Switcher showing avatar, name, role, region */}
-        <div className="relative" ref={dropdownRef}>
-          <button
-            type="button"
-            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            aria-haspopup="listbox"
-            aria-expanded={isDropdownOpen}
-            aria-label={`Active user persona: ${currentUser.name} (${currentUser.role})`}
-            className="flex items-center gap-2.5 p-1.5 rounded-input hover:bg-chrome-navy-800 transition-subtle cursor-pointer border border-transparent hover:border-[#1E455A] min-h-[44px]"
-          >
-            <Avatar name={currentUser.name} id={currentUser.id} size="sm" />
-            <div className="hidden md:flex flex-col text-left">
-              <span className="text-caption font-semibold text-chrome-text leading-tight">
-                {currentUser.name}
-              </span>
-              <span className="text-[11px] text-chrome-muted leading-tight font-mono-numbers">
-                {currentUser.role} {currentUser.agencyId ? `• ${currentUser.agencyId}` : currentUser.region ? `• ${currentUser.region}` : ""}
-              </span>
-            </div>
-            <ChevronDown className={cn("w-3.5 h-3.5 text-chrome-muted shrink-0 transition-transform duration-120", isDropdownOpen && "rotate-180")} />
-          </button>
+        {/* Right: ThemeToggle + Role Switcher */}
+        <div className="flex items-center gap-2.5 shrink-0">
+          {/* Light / Dark / System Segmented Control */}
+          <ThemeToggle />
 
-          {/* Role Switcher Dropdown Popover */}
-          {isDropdownOpen && (
-            <div
-              role="listbox"
-              className="absolute right-0 mt-2 w-80 bg-surface text-content-primary border border-border-strong rounded-card shadow-lg py-1.5 z-50 animate-in fade-in zoom-in-95 duration-120"
+          {/* Role Switcher with avatar, name, role, region, and hover card */}
+          <div
+            className="relative"
+            ref={dropdownRef}
+            onMouseEnter={handleMouseEnterRole}
+            onMouseLeave={handleMouseLeaveRole}
+          >
+            <button
+              type="button"
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              aria-haspopup="listbox"
+              aria-expanded={isDropdownOpen}
+              aria-label={`Active user persona: ${currentUser.name} (${currentUser.role})`}
+              className="flex items-center gap-2 p-1 pl-1.5 pr-2.5 rounded-full hover:bg-surface-subtle transition-subtle cursor-pointer border border-transparent hover:border-border min-h-[38px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
             >
-              {/* Active persona header */}
-              <div className="px-3.5 py-2 border-b border-border bg-surface-subtle">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-content-tertiary">
-                  Switch Active Persona
-                </p>
-                {/* 'Can see' hint card for active user */}
-                <div className="mt-2 p-2 rounded-input bg-brand-50 border border-brand-100 text-[11px] flex flex-col gap-1">
-                  <div className="flex items-center gap-1.5 text-brand-700 font-semibold">
-                    <Eye className="w-3.5 h-3.5 shrink-0" />
-                    <span>{currentRoleInfo.label}</span>
+              <Avatar name={currentUser.name} id={currentUser.id} size="sm" />
+              <div className="hidden md:flex flex-col text-left">
+                <span className="text-caption font-semibold text-content-primary leading-tight">
+                  {currentUser.name}
+                </span>
+                <div className="flex items-center gap-1.5 text-[11px] text-content-tertiary leading-tight font-mono-numbers">
+                  <span>{currentUser.role}</span>
+                  {currentUser.region && (
+                    <RegionTag region={currentUser.region} className="h-4 px-1.5 text-[10px]" />
+                  )}
+                </div>
+              </div>
+              <ChevronDown
+                className={cn(
+                  "w-3.5 h-3.5 text-content-tertiary shrink-0 transition-transform duration-120 ml-0.5",
+                  isDropdownOpen && "rotate-180"
+                )}
+              />
+            </button>
+
+            {/* Persona Hover Card (informative popover when hovering button) */}
+            {isHoverCardOpen && !isDropdownOpen && (
+              <div className="absolute right-0 top-full mt-2 w-72 bg-surface text-content-primary border border-border-strong rounded-card shadow-lg p-3 z-50 animate-in fade-in zoom-in-95 duration-120 select-none">
+                <div className="flex items-center gap-2 pb-2 border-b border-border">
+                  <Avatar name={currentUser.name} id={currentUser.id} size="sm" />
+                  <div className="min-w-0">
+                    <p className="text-caption font-semibold text-content-primary truncate">
+                      {currentUser.name}
+                    </p>
+                    <p className="text-[11px] text-content-secondary font-mono-numbers">
+                      {currentRoleInfo.label}
+                    </p>
                   </div>
+                </div>
+                <div className="mt-2 text-[11px]">
+                  <p className="font-semibold text-brand-orange-text dark:text-brand-orange mb-1 flex items-center gap-1">
+                    <Eye className="w-3.5 h-3.5" /> Capabilities
+                  </p>
                   <ul className="text-content-secondary space-y-0.5 pl-4 list-disc text-[10px]">
                     {currentRoleInfo.permissions.map((p, i) => (
                       <li key={i}>{p}</li>
                     ))}
                   </ul>
                 </div>
+                <div className="mt-2 pt-2 border-t border-border text-[10px] text-content-tertiary text-center">
+                  Click to switch persona
+                </div>
               </div>
+            )}
 
-              {/* Persona Options List */}
-              <div className="max-h-72 overflow-y-auto py-1">
-                {DEMO_USERS.map((user: DemoUser) => {
-                  const isSelected = user.id === currentUser.id;
-                  return (
-                    <button
-                      key={user.id}
-                      type="button"
-                      role="option"
-                      aria-selected={isSelected}
-                      onClick={() => {
-                        setCurrentUser(user);
-                        setIsDropdownOpen(false);
-                      }}
-                      className={cn(
-                        "w-full flex items-center justify-between px-3.5 py-2.5 text-left hover:bg-surface-subtle transition-subtle cursor-pointer min-h-[44px]",
-                        isSelected && "bg-brand-50/70"
-                      )}
-                    >
-                      <div className="flex items-center gap-2.5 truncate">
-                        <Avatar name={user.name} id={user.id} size="sm" />
-                        <div className="truncate">
-                          <p className="text-caption font-semibold text-content-primary leading-tight truncate">
-                            {user.name}
-                          </p>
-                          <p className="text-[11px] text-content-secondary leading-tight truncate">
-                            {user.description}
-                          </p>
+            {/* Role Switcher Dropdown Popover */}
+            {isDropdownOpen && (
+              <div
+                role="listbox"
+                className="absolute right-0 top-full mt-2 w-80 bg-surface text-content-primary border border-border-strong rounded-card shadow-xl py-1.5 z-50 animate-in fade-in zoom-in-95 duration-120 select-none"
+              >
+                <div className="px-3.5 py-2 border-b border-border bg-surface-subtle rounded-t-card">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-content-tertiary">
+                    Switch Active Persona
+                  </p>
+                </div>
+
+                <div className="max-h-72 overflow-y-auto py-1">
+                  {DEMO_USERS.map((user: DemoUser) => {
+                    const isSelected = user.id === currentUser.id;
+                    return (
+                      <button
+                        key={user.id}
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        onClick={() => {
+                          setCurrentUser(user);
+                          setIsDropdownOpen(false);
+                          setIsHoverCardOpen(false);
+                        }}
+                        className={cn(
+                          "w-full flex items-center justify-between px-3.5 py-2.5 text-left hover:bg-surface-subtle transition-subtle cursor-pointer min-h-[44px]",
+                          isSelected && "bg-brand-50/70 dark:bg-orange-950/30"
+                        )}
+                      >
+                        <div className="flex items-center gap-2.5 truncate">
+                          <Avatar name={user.name} id={user.id} size="sm" />
+                          <div className="truncate">
+                            <p className="text-caption font-semibold text-content-primary leading-tight truncate">
+                              {user.name}
+                            </p>
+                            <p className="text-[11px] text-content-secondary leading-tight truncate">
+                              {user.description}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                      {isSelected && (
-                        <Check className="w-4 h-4 text-brand-600 shrink-0 ml-2" />
-                      )}
-                    </button>
-                  );
-                })}
+                        {isSelected && (
+                          <Check className="w-4 h-4 text-brand-orange-text dark:text-brand-orange shrink-0 ml-2" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </header>

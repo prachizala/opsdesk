@@ -14,6 +14,14 @@ export interface SlaBadgeProps {
   showRing?: boolean;
 }
 
+/**
+ * SlaBadge: Strict one-line SLA status badge.
+ * - Always ONE line (whitespace-nowrap, min-width)
+ * - Always icon + explicit label (never color alone)
+ * - Breached pulses subtly (pulse stops on hover); ONLY red element
+ * - At-risk uses distinct yellow-amber (#A16207 / #FACC15), never brand orange
+ * - Closed / Stopped is muted slate with no countdown
+ */
 export function SlaBadge({
   sla,
   size = "sm",
@@ -85,9 +93,9 @@ export function SlaBadge({
   };
 
   const sizeClasses = {
-    sm: "h-[22px] px-2 text-[12px]",
-    md: "h-7 px-2.5 text-caption",
-    lg: "h-8 px-3 text-body font-semibold",
+    sm: "h-[22px] px-2.5 text-[12px]",
+    md: "h-7 px-3 text-caption",
+    lg: "h-8 px-3.5 text-body font-semibold",
   };
 
   const iconSize = size === "sm" ? "w-3.5 h-3.5" : size === "lg" ? "w-4.5 h-4.5" : "w-4 h-4";
@@ -98,7 +106,7 @@ export function SlaBadge({
     return (
       <span
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-chip font-medium whitespace-nowrap bg-sla-stopped-bg text-sla-stopped-text select-none shrink-0 leading-none",
+          "inline-flex items-center gap-1.5 rounded-full font-medium whitespace-nowrap min-w-[76px] bg-sla-stopped-bg text-sla-stopped-text select-none shrink-0 leading-none",
           sizeClasses[size],
           className
         )}
@@ -116,7 +124,7 @@ export function SlaBadge({
     return (
       <span
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-chip font-semibold whitespace-nowrap bg-sla-escalated-bg text-sla-escalated-text select-none shrink-0 leading-none",
+          "inline-flex items-center gap-1.5 rounded-full font-semibold whitespace-nowrap min-w-[96px] bg-sla-escalated-bg text-sla-escalated-text select-none shrink-0 leading-none",
           sizeClasses[size],
           className
         )}
@@ -130,13 +138,13 @@ export function SlaBadge({
     );
   }
 
-  // Breached: red (pulses subtly, pauses on hover)
+  // Breached: the ONLY red (pulses subtly, pauses on hover)
   if (sla.status === "BREACHED" || (secondsRemaining !== null && secondsRemaining < 0)) {
     const cd = secondsRemaining !== null ? formatCountdown(secondsRemaining) : "";
     return (
       <span
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-chip font-semibold whitespace-nowrap min-w-[96px] bg-sla-breached-bg text-sla-breached-text select-none shrink-0 leading-none animate-sla-breach hover:[animation-play-state:paused]",
+          "inline-flex items-center gap-1.5 rounded-full font-semibold whitespace-nowrap min-w-[104px] bg-sla-breached-bg text-sla-breached-text select-none shrink-0 leading-none animate-sla-breach hover:[animation-play-state:paused]",
           sizeClasses[size],
           className
         )}
@@ -150,13 +158,13 @@ export function SlaBadge({
     );
   }
 
-  // At risk: amber
+  // At risk: yellow-amber (distinct from brand orange!)
   if (sla.status === "AT_RISK") {
     const cd = secondsRemaining !== null ? formatCountdown(secondsRemaining) : "";
     return (
       <span
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-chip font-semibold whitespace-nowrap bg-sla-at_risk-bg text-sla-at_risk-text select-none shrink-0 leading-none",
+          "inline-flex items-center gap-1.5 rounded-full font-semibold whitespace-nowrap min-w-[96px] bg-sla-at_risk-bg text-sla-at_risk-text select-none shrink-0 leading-none",
           sizeClasses[size],
           className
         )}
@@ -175,7 +183,7 @@ export function SlaBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-chip font-medium whitespace-nowrap bg-sla-normal-bg text-sla-normal-text select-none shrink-0 leading-none",
+        "inline-flex items-center gap-1.5 rounded-full font-medium whitespace-nowrap min-w-[96px] bg-sla-normal-bg text-sla-normal-text select-none shrink-0 leading-none",
         sizeClasses[size],
         className
       )}

@@ -1,220 +1,190 @@
-# OpsDesk Design System — "Airport Control Tower"
+# OpsDesk Design System — "Control Tower, Udaan Palette"
 
-**Concept:** *"Calm, confident mission control for travel operations."*  
-OpsDesk operators monitor this screen during continuous 8-hour dispatch shifts. The visual language evokes an airport control tower and flight departure boards: dark navy chrome framing a crisp, high-legibility light content area, energized by amber departure board accents and calm ocean teal highlights.
+**Concept:** *"Calm, authoritative mission control for high-velocity travel operations."*  
+OpsDesk operators monitor this dispatch surface during continuous 8-hour dispatch shifts. The visual language evokes an airport control tower and flight departure boards: dark navy chrome framing a crisp, high-contrast operational surface, energized by warm Udaan orange accents and departure board amber indicators.
+
+Both **Light Mode** and **Dark Mode** are first-class, fully supported environments with zero flash on load.
 
 ---
 
-## 1. Color Tokens & CSS Variables
+## 1. Color System & Semantic Tokens
 
-All colors are declared as CSS custom properties in `src/app/globals.css` and mapped to Tailwind utilities in `tailwind.config.ts`. All content colors are defined via variables so dark mode can be introduced seamlessly.
+All color values are defined as CSS variables on `:root` (Light mode) and `[data-theme="dark"]` / `.dark` (Dark mode) in `src/app/globals.css`, and mapped to Tailwind utilities in `tailwind.config.ts`.
 
-### 1.1 Control Tower Chrome (Top Bar & Sidebar)
-| Token | Hex | Tailwind Utility | Role / Usage |
+### 1.1 Complete Color Palette Matrix
+
+| Token | Light Mode Hex | Dark Mode Hex | Role / WCAG Notes |
 | :--- | :--- | :--- | :--- |
-| `--chrome-navy-900` | `#0B1F2A` | `bg-chrome-navy-900` | Mission control top navigation bar and primary sidebar background |
-| `--chrome-navy-800` | `#12303F` | `bg-chrome-navy-800` | Elevated chrome containers, active nav items, search input fill |
-| `--chrome-text` | `#E6F1F5` | `text-chrome-text` | Primary readable label in chrome areas |
-| `--chrome-muted` | `#8FB0BD` | `text-chrome-muted` | Secondary meta, unselected nav links, shortcut kbd cues in chrome |
-| `--departure-amber` | `#FFB020` | `text-departure-amber` | Departure board accent, live split-flap characters, countdown beacons |
+| `--canvas` | `#F8FAFC` | `#0B1120` | Root application backdrop |
+| `--surface` | `#FFFFFF` | `#0F172A` | Elevated cards, tables, drawers, modals, floating pill bars |
+| `--surface-subtle` | `#F1F5F9` | `#1E293B` | Table row hover, tab rails, input disabled fills |
+| `--border` | `#E2E8F0` | `#1E293B` | Container and divider borders |
+| `--border-strong` | `#CBD5E1` | `#334155` | Active inputs, table headers, hover borders |
+| `--text-primary` | `#0F172A` (Navy) | `#F1F5F9` | Page titles, ticket identifiers, primary values (Contrast >= 15:1) |
+| `--text-secondary` | `#475569` | `#CBD5E1` | Body copy, form field labels, secondary metadata (Contrast >= 7:1) |
+| `--text-tertiary` | `#64748B` | `#94A3B8` | Timestamps, column caps, breadcrumbs (Contrast >= 4.5:1) |
+| `--text-disabled` | `#94A3B8` | `#64748B` | Disabled labels, placeholder text |
+| `--brand-orange` | `#EA580C` | `#F97316` | Brand accent fills, icons, large text (>=24px or 18.66px bold) |
+| `--brand-orange-text` | `#C2410C` | `#FB923C` | Small orange text on light (5.2:1 contrast against `#FFFFFF`) |
+| `--brand-50` | `#FFF7ED` | `rgba(249, 115, 22, 0.14)` | Soft tint backgrounds for badges, active tabs |
+| `--brand-100` | `#FFEDD5` | `rgba(249, 115, 22, 0.22)` | Subtle borders on orange chips |
+| `--orange-tint` | `rgba(234, 88, 12, 0.08)` | `rgba(249, 115, 22, 0.14)` | Ambient highlights |
+| `--chrome-navy-900` | `#0F172A` | `#0F172A` | Sidebar island, primary button fill, departure board panel |
+| `--chrome-navy-800` | `#1E293B` | `#1E293B` | Active sidebar item fill, elevated dark panels |
+| `--departure-amber` | `#FFB020` | `#FACC15` | Departure board split-flap characters, countdown beacons |
 
-### 1.2 Canvas & Surfaces (Content Area)
-| Token | Hex | Tailwind Utility | Role / Usage |
-| :--- | :--- | :--- | :--- |
-| `--canvas` | `#F5F7FA` | `bg-canvas` | Global application content backdrop |
-| `--surface` | `#FFFFFF` | `bg-surface` | Elevated cards, tables, drawers, modals, dropdown menus |
-| `--surface-subtle` | `#EEF2F6` | `bg-surface-subtle` | Table row hover, tab rails, subtle tracks, input disabled states |
-| `--border` | `#E3E7ED` | `border-border` | Standard 1px container and table divider borders |
-| `--border-strong` | `#CBD2DC` | `border-border-strong` | Active boundaries, focused dividers, input hover borders |
+### 1.2 Contrast Rules (WCAG 2.2 AA Mandatory)
+- **White text on `#EA580C` fails AA!** Never place white text on brand orange fills.
+- **Orange fills ALWAYS carry navy `#0F172A` text** (`5:1` contrast ratio).
+- **Small orange text on light backgrounds** must use `#C2410C` (`5.2:1` contrast ratio).
+- In dark mode, `#F97316` fills carry `#0F172A` navy text, achieving `5:1` contrast.
 
-### 1.3 Text Hierarchy (WCAG 2.2 AA >= 4.5:1 on White)
-| Token | Hex | Tailwind Utility | Contrast Ratio | Role / Usage |
-| :--- | :--- | :--- | :---: | :--- |
-| `--text-primary` | `#0F172A` | `text-content-primary` | 15.8:1 | Page titles, ticket titles, table identifiers, values |
-| `--text-secondary` | `#475569` | `text-content-secondary` | 7.3:1 | Body copy, meta descriptions, form field labels, secondary items |
-| `--text-tertiary` | `#64748B` | `text-content-tertiary` | 4.6:1 | Timestamps, table column labels, helper text, breadcrumbs |
-| `--text-disabled` | `#94A3B8` | `text-content-disabled` | 2.9:1 | Disabled button labels, placeholders, inactive icons |
+---
 
-### 1.4 Brand Teal
-Used strictly for primary buttons, active nav/tabs, hyperlinks, and keyboard focus rings:
-| Token | Hex | Tailwind Utility | Role / Usage |
-| :--- | :--- | :--- | :--- |
-| `--brand-50` | `#ECFEFF` | `bg-brand-50` | Active tab count chip, selected row highlight, status open background |
-| `--brand-100` | `#CFFAFE` | `bg-brand-100` | Subtle rings, hover states on brand items |
-| `--brand-500` | `#0E9AA7` | `bg-brand-500` | Keyboard focus ring (`2px solid` with `2px offset`), key indicators |
-| `--brand-600` | `#0B7F8B` | `bg-brand-600` | Primary action buttons (`Button variant="primary"`), active indicators |
-| `--brand-700` | `#0A6772` | `bg-brand-700` | Primary button hover / active pressed states, dark accents |
+## 2. SLA Semantic Matrix & Status Colors
 
-### 1.5 SLA Semantic Matrix
-> **Rule:** SLA status must **always** be rendered on a single line (`whitespace-nowrap`), paired with an icon and explicit text label. Color alone is never permitted.
+> **CRITICAL RULE:** Never convey status with color alone. Status indicators must **always** include an explicit icon and text label.
 
-| SLA Status | Icon | Text Hex | Background Hex | Tailwind Tokens | Countdown Behavior |
-| :--- | :---: | :--- | :--- | :--- | :--- |
-| **On track** | `CheckCircle2` | `#15803D` | `#DCFCE7` | `text-sla-normal-text bg-sla-normal-bg` | "On track 3d 4h" or "On track 2h 14m" |
-| **At risk** | `Clock` | `#B45309` | `#FEF3C7` | `text-sla-at_risk-text bg-sla-at_risk-bg` | "At risk 2h 14m" (urgent < 5m) |
-| **Breached** | `AlertTriangle` | `#B91C1C` | `#FEE2E2` | `text-sla-breached-text bg-sla-breached-bg` | "Breached 10h 3m" (subtle pulse, pauses on hover) |
-| **Escalated** | `ArrowUpCircle` | `#6D28D9` | `#EDE9FE` | `text-sla-escalated-text bg-sla-escalated-bg` | "Escalated 2h 14m" |
-| **Stopped / Closed** | `PauseCircle` | `#64748B` | `#F1F3F6` | `text-sla-stopped-text bg-sla-stopped-bg` | "Stopped" or "Closed" (No countdown) |
-
-- **Refresh Frequency:** Countdown updates every 30 seconds under normal conditions, accelerating to every 1 second when remaining time is less than 5 minutes.
-- **Accessibility:** Emits `aria-live="polite"` only when the SLA status changes, avoiding repetitive screen reader chatter on ticks.
-
-### 1.6 Region Tokens (Small Tags & Load Bars)
-| Region | Code | Text Hex | Background Hex | Tailwind Class |
+| SLA Status | Icon | Light Mode (Text on BG) | Dark Mode (Text on BG) | Behavior |
 | :--- | :---: | :--- | :--- | :--- |
-| **Middle East & Africa** | `MEA` | `#D97706` | `#FEF3C7` | `bg-region-mea-bg text-region-mea-text` |
-| **Asia-Pacific** | `APAC` | `#0D9488` | `#CCFBF1` | `bg-region-apac-bg text-region-apac-text` |
-| **Europe** | `EU` | `#2563EB` | `#DBEAFE` | `bg-region-eu-bg text-region-eu-text` |
-| **Americas** | `AMER` | `#7C3AED` | `#EDE9FE` | `bg-region-amer-bg text-region-amer-text` |
+| **On track** | `CheckCircle2` | `#15803D` on `#DCFCE7` | `#4ADE80` on `rgba(74,222,128,0.14)` | Calm green status indicator |
+| **At risk** | `Clock` | `#A16207` on `#FEF9C3` | `#FACC15` on `rgba(250,204,21,0.14)` | **Yellow/amber (distinct from brand orange!)** |
+| **Breached** | `AlertTriangle` | `#B91C1C` on `#FEE2E2` | `#F87171` on `rgba(248,113,113,0.14)` | **The ONLY red element in the entire system.** Subtle pulse animation (pauses on hover) |
+| **Escalated** | `ArrowUpCircle` | `#6D28D9` on `#EDE9FE` | `#A78BFA` on `rgba(167,139,250,0.14)` | Deep violet indicator |
+| **Stopped / Closed** | `PauseCircle` | `#64748B` on `#F1F5F9` | `#94A3B8` on `#1E293B` | Muted slate; **no countdown displayed** |
 
-### 1.7 Priority Marks & Chips (Neutral-to-Warm Tones)
-> **Rule:** Pure alarm red is strictly reserved for Breached SLA. Priority chips use neutral-to-warm amber/ochre tones so they do not compete with critical SLA emergencies.
-
-- **Urgent:** Ochre/warm amber dot (`#B45309` on `#FEF3C7`)
-- **High:** Orange dot (`#C2410C` on `#FFEDD5`)
-- **Medium:** Blue dot (`#1D4ED8` on `#DBEAFE`)
-- **Low:** Slate dot (`#64748B` on `#F1F3F6`)
+- **SlaBadge:** Must **always** render on ONE line (`whitespace-nowrap`, `min-width`), combining `icon + label + mono countdown`.
+- **SlaRing:** 16-20px circular ring that fills as deadline nears; on hover, shows `%` and ticking seconds.
 
 ---
 
-## 2. Typography Scale & Fonts
+## 3. Priority Mark & Region System
 
-- **Headings Font:** `Plus Jakarta Sans` (`--font-heading`, sans-serif) for high-confidence operational headers.
-- **UI Font:** `Inter` (`--font-inter`, sans-serif) with optical sizing and font feature settings `cv02`, `cv03`, `cv04`, `cv11`.
-- **Data & Monospace Font:** `JetBrains Mono` (`--font-mono`, monospace) strictly paired with `font-variant-numeric: tabular-nums` for ticket IDs (`TCK-1001`), PNR/TBOH numbers, countdown timers, departure board characters, and metrics.
+### 3.1 PriorityMark (Slate Tones Only)
+> **CRITICAL RULE:** **NO RED OR ORANGE PRIORITY CHIPS.** Red is reserved strictly for SLA Breached. Priority indicators use muted slate tones with directional chevron icons.
 
-### Type Scale
-| Scale Value | Font Size / Line Height | Tailwind Class | Usage |
-| :---: | :---: | :--- | :--- |
-| **11** | 11px / 14px (+0.05em tracking) | `text-11` / `text-micro-label` | Uppercase category tags, table header caps, metadata tags |
-| **12** | 12px / 16px | `text-12` / `text-caption` | Chips, RegionTag, SlaBadge, helper text, Timeline labels |
-| **13** | 13px / 20px | `text-13` / `text-table` | Table cells, queue rows, sidebar navigation labels |
-| **14** | 14px / 20px | `text-14` / `text-body` | Standard body text, form inputs, notes, message threads |
-| **16** | 16px / 24px | `text-16` / `text-section` | Card headers, section titles, modal headers |
-| **20** | 20px / 28px | `text-20` / `text-page` | Primary page headers ("Operations Queue", "Insights & Themes") |
-| **28** | 28px / 36px | `text-28` / `text-kpi` | High-impact metric numbers on KPI summary cards |
+| Priority | Icon | Light Mode Tones | Dark Mode Tones |
+| :--- | :---: | :--- | :--- |
+| **Urgent** | `ChevronsUp` (double chevron up) | `text-slate-800 bg-slate-200/80 font-semibold` | `text-slate-100 bg-slate-800 font-semibold` |
+| **High** | `ChevronUp` (chevron up) | `text-slate-700 bg-slate-100 font-medium` | `text-slate-300 bg-slate-800/80 font-medium` |
+| **Medium** | `Minus` (dash) | `text-slate-600 bg-slate-100/70 font-medium` | `text-slate-400 bg-slate-800/60 font-medium` |
+| **Low** | `ChevronDown` (chevron down) | `text-slate-500 bg-slate-100/50 font-normal` | `text-slate-500 bg-slate-800/40 font-normal` |
 
----
-
-## 3. Spatial System, Radii & Shadows
-
-- **Strict 4px Spatial Grid:** Layout and spacing dimensions must be exact multiples of 4px (`4px`, `8px`, `12px`, `16px`, `20px`, `24px`, `32px`, `48px`).
-- **Border Radii:**
-  - `radius-input` / `radius-chip`: `6px` (form inputs, selects, chips, buttons)
-  - `radius-card`: `10px` (KPI cards, content panels, table containers)
-  - `radius-modal`: `14px` (modals, dialog cards, flyout drawers)
-- **1px Crisp Borders:** All structural containers use 1px solid boundaries (`#E3E7ED` / `#CBD2DC`).
-- **Elevation Shadows:**
-  - `shadow-xs`: `0 1px 2px rgba(15, 23, 42, 0.04)` (Buttons, subtle interactive items)
-  - `shadow-sm`: `0 1px 2px rgba(15, 23, 42, 0.06)` (Cards, input containers)
-  - `shadow-md`: `0 4px 6px -1px rgba(15, 23, 42, 0.08)` (Dropdowns, popovers, toast alerts)
-  - `shadow-lg`: `0 10px 15px -3px rgba(15, 23, 42, 0.08)` (Modals, flyout panels)
-  - `shadow-glow`: `0 0 16px -2px var(--brand-500)` (Search bar focus state)
+### 3.2 Region Tags (Four Muted Hues)
+- **MEA (Middle East & Africa):** Muted ochre (`#B45309` on `#FEF3C7` / Dark: `#FBBF24` on `rgba(245,158,11,0.14)`)
+- **APAC (Asia-Pacific):** Muted teal (`#0D9488` on `#CCFBF1` / Dark: `#2DD4BF` on `rgba(45,212,191,0.14)`)
+- **EU (Europe):** Muted blue (`#2563EB` on `#DBEAFE` / Dark: `#60A5FA` on `rgba(96,165,250,0.14)`)
+- **AMER (Americas):** Muted purple (`#7C3AED` on `#EDE9FE` / Dark: `#C084FC` on `rgba(192,132,252,0.14)`)
 
 ---
 
-## 4. Interaction, Focus & Motion Rules
+## 4. Theme Switching Architecture
 
-- **Motion Restraint:**
-  - Animate `transform` and `opacity` only (never animate layout properties like width, height, margin, or padding).
-  - **Zero layout shift on hover:** hovering an element must never move neighboring items.
-  - Keyboard `:focus-visible` receives the identical visual cue as hover.
-  - No hover-only information on touch devices.
-- **Motion Durations:**
-  - Micro-interactions & hover: `120ms` with `cubic-bezier(0, 0, 0.2, 1)`
-  - Panel, Drawer, Dialog open/close: `180ms` with `cubic-bezier(0, 0, 0.2, 1)`
-  - Tooltip reveal delay: `400ms`
-- **Accessibility (`prefers-reduced-motion`):**
-  - When reduced motion is preferred by the OS, all transition and animation durations collapse to `0.01ms`, button shines/wipes are disabled, and breached SLA pulses stop.
-- **Keyboard Focus Ring:** Every interactive element displays a `2px solid var(--brand-500)` outline with `2px outline-offset` upon `:focus-visible`.
+- **Tokens:** Defined on `:root` and `[data-theme="dark"]` / `.dark`.
+- **Zero Flash on Load:** An inline blocking script executes synchronously in `<head>` before first paint, evaluating `localStorage.getItem('opsdesk_theme')` with fallback to `window.matchMedia('(prefers-color-scheme: dark)')`.
+- **ThemeToggle:** Segmented pill control in TopNav with three modes: **Light** (`Sun`), **Dark** (`Moon`), and **System** (`Monitor`). Default is **System**.
+- **Persistence:** Persists choice to `localStorage` wrapped in a `try/catch` block.
+- **Smooth Transition:** 200ms ease for color, border-color, and background-color. Disabled completely when `prefers-reduced-motion: reduce` is active.
 
 ---
 
-## 5. UI Primitives Inventory (`frontend/src/components/ui/`)
+## 5. Typography Scale & Headline Pattern
 
-All primitives are exported from `frontend/src/components/ui/index.ts`:
+### 5.1 Next.js Font Optimization
+- **Headings Font:** `Plus Jakarta Sans` (`--font-heading`, `font-heading`)
+- **UI Font:** `Inter` (`--font-inter`, `font-sans`)
+- **Monospace Font:** `JetBrains Mono` (`--font-mono`, `font-mono-numbers`, `tabular-nums`) for IDs, timestamps, countdowns, departure characters.
 
-1. **`Button`:**
-   - Variants: `primary` (one-time shine sweep on hover, `active:scale-[0.98]`), `secondary`, `ghost`, `danger` (violet wipe hover), `outline`.
-   - Sizes: `sm` (32px), `md` (36px).
-   - Includes loading spinner slot and accessible disabled state with `disabledTooltip`.
-2. **`IconButton`:**
-   - Round bg fade-in, icon lifts 2px on hover (`hover:-translate-y-0.5`). Strictly enforces `aria-label`.
-3. **`Input`, `Select`, `Textarea`:**
-   - Unified 36px inputs with label, helperText, error state, and 2px brand focus rings.
-4. **`Tabs`:**
-   - Underline style with active indicator, count chip, and gliding underline indicator.
-5. **`Chip`, `StatusChip`, `RegionTag`:**
-   - Height 20-22px, 12px text, soft background, no borders.
-   - RegionTag supports MEA, APAC, EU, AMER with regional color palettes.
-6. **`PriorityMark`:**
-   - Dot + label in neutral-to-warm tones (Urgent, High, Medium, Low).
-7. **`SlaBadge`:**
-   - Single line always (`whitespace-nowrap`), paired icon + label + mono countdown.
-   - Breached pulses subtly (pauses on hover). Closed/Stopped muted slate without countdown.
-8. **`SlaRing`:**
-   - 16-20px circular SVG ring filling as deadline approaches; hover shows % elapsed and ticking seconds.
-9. **`FlightPathTimeline` (Signature Graphic):**
-   - Dotted arc/track NOW -> LCD Gate -> Check-in with a moving plane marker.
-   - Plane turns amber approaching gate (< 2h) and red after gate breach.
-   - Controlling deadline highlighted and labelled. Compact and full variants.
-   - Re-exports `TravelTimeline` for complete backward compatibility.
-10. **`DepartureBoard` & `SplitFlap`:**
-    - Dark navy panel primitive with mechanical split-flap digit flip transition and amber mono text.
-11. **`HealthBar`:**
-    - Stacked SLA split bar with legend counts; segment hover thickens and dims others; click triggers filter callback.
-12. **`SpotlightGlow`:**
-    - Cursor-follow radial glow wrapper for cards.
-13. **`KpiCard`:**
-    - 28px numbers, hover lift 2px + "View" arrow, click filter callback.
-14. **`Sparkline`:**
-    - Inline SVG with hover guide line + value tooltip.
-15. **`CommandPalette` (Ctrl/Cmd+K):**
-    - Modal dialog to search tickets, jump to pages, or switch user identities.
-16. **`BoardingPassCard`:**
-    - Airport control tower themed card with perforated edge and barcode mono text.
-17. **`Avatar`:**
-    - Deterministic colors derived from user ID/name.
-18. **`Card`, `Tooltip` (400ms delay), `Popover`, `Modal`, `Drawer`, `Toast`, `Skeleton`, `EmptyState`, `ErrorState`, `KeyValue` (TBOH copy with "Copied" tick), `Countdown`, `CountUp`:**
-    - Complete suite of accessible operational components.
+### 5.2 Signature Headline Pattern (Page H1)
+Page headers must follow the signature two-tone headline pattern:
+1. **Small Eyebrow Label Above:** 11px uppercase tracking-wider font in brand orange (`text-brand-orange-text dark:text-brand-orange`), e.g., `"LIVE OPERATIONS"`.
+2. **Two-Tone H1 Title:** Main title word in navy primary text + emphasis word in **orange italic** (`text-brand-orange-text dark:text-brand-orange italic font-heading`), e.g., `"Operations "` + `italic("Queue")`.
 
 ---
 
-## 6. App Shell (`frontend/src/components/shell/`)
+## 6. Shape Language, Radii & Spacing
 
-- **`TopNav`:**
-  - 56px height (`h-14`), Navy-900 `#0B1F2A` dark chrome.
-  - Geometric flight-path "O" logo mark with teal ring, flight arc, and departure amber beacon.
-  - Center global search with Ctrl+K shortcut that glows with `shadow-glow` and widens slightly on focus.
-  - Right role switcher with avatar, name, role, region, and a "can see" hint card explaining role permissions.
-  - Dismissible 32px amber demo-auth banner.
-  - Persistent API health check alert with retry countdown when backend is offline.
-- **`Sidebar`:**
-  - 232px width, Navy-900 `#0B1F2A` dark chrome, collapsible to 64px rail.
-  - Expands on hover when collapsed (with tooltips on rail items).
-  - Active item: `bg-chrome-navy-800` + 3px brand left bar (`border-l-[3px] border-brand-500`).
-  - Hover: icon nudges 2px right (`group-hover:translate-x-0.5`).
-  - Bottom: collapse toggle + "Region load" tiny bars (MEA, APAC, EU, AMER) showing regional operational load.
-- **`Layout` (`frontend/src/app/layout.tsx`):**
-  - Max-width 1440px container, accessible skip link to main content (`#main-content`), integrated shell components.
+### 6.1 Pill Language
+- **Buttons, chips, tabs, top bar, and tags are fully rounded pills** (`rounded-full`).
+- **Chips:** 20-22px height, 12px text, soft tint background, no border.
+
+### 6.2 Surface Radii Scale
+- **Major Panels (24px):** Departure board, health bar panel, sidebar island (`rounded-[24px]` / `rounded-panel`).
+- **Modals (24px):** Modal dialog cards (`rounded-[24px]` / `rounded-modal`).
+- **Data Cards (12px):** Metric KPI cards, ticket preview drawer, table container (`rounded-[12px]` / `rounded-card`).
+- **Inputs (8px):** Form input fields, textareas, selects (`rounded-[8px]` / `rounded-input`).
+
+### 6.3 Focus Ring
+- Strict **2px solid orange ring** (`#EA580C` in light / `#FB923C` in dark) with **2px offset** on all focusable elements.
 
 ---
 
-## 7. Design System Do & Don't Rules
+## 7. Signature Components & Shell Architecture
 
-### DO
-- ✅ **DO** pair every SLA badge with an icon and explicit text label on a single line (`whitespace-nowrap`).
-- ✅ **DO** use `font-mono-numbers` (`tabular-nums`) for all countdown timers, ticket IDs, and numeric metrics to prevent layout shifts.
-- ✅ **DO** reserve pure alarm red exclusively for Breached SLA states.
-- ✅ **DO** keep chips at 20-22px height with soft tinted backgrounds and zero borders.
-- ✅ **DO** maintain strict 4px spacing alignment throughout all panels.
-- ✅ **DO** respect role boundaries: hide operational internals (queue scores, internal notes) from external agency Requesters.
-- ✅ **DO** provide clear empty, error, and loading skeleton states for every data list.
+### 7.1 Primary Button (Signature)
+- **Light Mode:** Navy pill (`#0F172A`), white text, trailing `ArrowUpRight` icon. On hover, the fill wipes smoothly from left to right with brand orange (`#EA580C`), text flips to navy (`#0F172A`), and the arrow nudges up-right by 2px (`translate-x-0.5 -translate-y-0.5`).
+- **Dark Mode:** Orange fill (`#F97316`) with navy text (`#0F172A`). On hover, background lightens to `#FB923C` and the arrow nudges up-right 2px.
+- **Secondary Button:** Surface fill with standard border; on hover, border transitions to brand orange.
 
-### DON'T
-- ❌ **DON'T** use saturated gradients or bright hero graphics that cause eye strain during 8-hour operator shifts.
-- ❌ **DON'T** rely on color alone to indicate SLA breaches or risks.
-- ❌ **DON'T** introduce heavy external component libraries or animation engines (e.g., framer-motion).
-- ❌ **DON'T** let countdown ticks jiggle or shift table row widths.
-- ❌ **DON'T** animate layout properties (e.g. width/height) on hover — animate `transform` and `opacity` only.
-- ❌ **DON'T** show internal operational diagnostics to external agency Requesters.
+### 7.2 Floating Pill TopNav
+- Sticky top with 12-16px margin from edges.
+- Floating pill structure: `bg-surface/95 backdrop-blur-md rounded-full border border-border shadow-sm px-4 sm:px-6 h-14`.
+- Geometric flight-path "O" logo mark SVG + "OpsDesk" wordmark.
+- Global search pill with `Ctrl+K` hint badge.
+- `ThemeToggle` segmented control.
+- Role switcher with avatar, name, role, region tag, and hover card.
+- Slim 32px demo-auth banner, dismissible per session.
+
+### 7.3 Navy Sidebar Island
+- Independent island with `rounded-[24px]` and 12px margin.
+- Stays dark navy (`#0F172A`) in both light and dark modes.
+- Width: 232px; collapsible to 64px rail.
+- When collapsed, smoothly expands on hover with tooltips.
+
+### 7.4 FlightPathTimeline
+- Dotted track: `NOW` -> `LCD Gate` -> `Check-in` with moving small plane marker.
+- Plane marker is brand orange (`#EA580C` / `#F97316`).
+- Turns yellow-amber (`#A16207` / `#FACC15`) approaching gate (< 2h).
+- Turns red (`#B91C1C` / `#F87171`) after passing gate.
+- Controlling deadline clearly highlighted and labelled.
+- Available in compact (table row, overflow-hidden) and full (ticket) variants.
+
+### 7.5 DepartureBoard & SplitFlap
+- Large 24px-rounded navy panel (`#0F172A` / `#0B1120`). Stays navy in both modes.
+- Amber mono text (`#FFB020` / `#FACC15`) with 3D split-flap flip animation.
+
+### 7.6 SegmentedTabs & Tabs
+- `SegmentedTabs`: Pill container with sliding navy (light) / orange (dark) indicator gliding between items.
+- `Tabs`: Underline variant with gliding orange underline indicator.
+
+---
+
+## 8. Interaction & Motion Rules (Hard Constraints)
+
+1. **NO POINTER-POSITION EFFECTS:**
+   - No cursor-following spotlight or glow.
+   - No 3D tilt, no parallax, no magnetic snapping, no custom cursor.
+   - Hover triggers strictly on enter/leave; never track mouse coordinates (`e.clientX`, `rect.left`).
+   - `SpotlightGlow` is a clean static or subtle wrapper without mouse coordinate tracking.
+
+2. **Motion Constraints:**
+   - Animate `transform` and `opacity` only (plus color / background transitions).
+   - **NO layout shifts on hover** (never expand padding, margins, or dimensions on hover).
+   - Under `prefers-reduced-motion: reduce`, all animations and transitions are disabled (`duration: 0.01ms !important`).
+   - Keyboard focus must receive the same visual feedback as hover.
+   - No hover-only information on touch surfaces.
+
+---
+
+## 9. Do's and Don'ts Checklist
+
+| Do | Don't |
+| :--- | :--- |
+| **DO** render SLA status on ONE line with an icon, label, and mono countdown. | **DON'T** wrap SLA badges across multiple lines or rely solely on color. |
+| **DO** reserve red (`#B91C1C` / `#F87171`) strictly for Breached SLA. | **DON'T** use red for urgent priority chips, buttons, or error borders. |
+| **DO** use PriorityMark in muted slate tones with chevron icons. | **DON'T** use red or orange chips for priority. |
+| **DO** pair orange fills with navy `#0F172A` text to guarantee 5:1 contrast. | **DON'T** put white text on `#EA580C` (it fails AA contrast). |
+| **DO** use 24px radius for major panels (departure board, health bar, sidebar island, modals). | **DON'T** mix arbitrary border radii; use the documented radii scale. |
+| **DO** use `font-mono-numbers` with `tabular-nums` for all IDs, timestamps, and timers. | **DON'T** render numeric metrics in proportional fonts where characters jitter. |
+| **DO** provide immediate zero-flash theme persistence using the inline blocking script. | **DON'T** allow a white flash when opening dark mode pages. |
+| **DO** disable all animations under `prefers-reduced-motion: reduce`. | **DON'T** run blinking or continuous motion without respect for accessibility preferences. |
