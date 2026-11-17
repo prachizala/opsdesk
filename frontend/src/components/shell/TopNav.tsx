@@ -183,18 +183,18 @@ export function TopNav() {
         <div
           role="alert"
           aria-live="assertive"
-          className="bg-red-950/80 border-b border-red-800/60 h-8 px-4 text-caption text-red-200 flex items-center justify-between transition-subtle"
+          className="bg-red-950/90 border-b border-red-800/80 min-h-9 px-4 py-1.5 text-caption text-red-200 flex items-center justify-between transition-subtle w-full z-50"
         >
-          <div className="flex items-center gap-2 mx-auto">
-            <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
-            <span>
-              Operations API unreachable — changes cannot be saved. Retrying in {retryingIn}s...
+          <div className="flex items-center gap-2 mx-auto flex-wrap justify-center">
+            <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+            <span className="font-medium">
+              Can&apos;t reach the server. Retrying in {retryingIn}s...
             </span>
             <button
               type="button"
               onClick={checkApiHealth}
               disabled={isRetrying}
-              className="underline font-semibold hover:text-white ml-1.5 cursor-pointer disabled:opacity-50 inline-flex items-center gap-1"
+              className="underline font-semibold hover:text-white ml-2 cursor-pointer disabled:opacity-50 inline-flex items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 rounded px-1.5 py-0.5 min-h-[32px]"
             >
               <RefreshCw className={cn("w-3 h-3", isRetrying && "animate-spin")} />
               Retry now
