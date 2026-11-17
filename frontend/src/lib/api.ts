@@ -32,7 +32,8 @@ export async function fetchTickets(
   intentFilter?: string,
   searchQuery?: string,
   priorityFilter?: string,
-  statusFilter?: string
+  statusFilter?: string,
+  signal?: AbortSignal
 ): Promise<TicketsListResponse> {
   let path = `/api/tickets?view=${encodeURIComponent(view)}&limit=${limit}&offset=${offset}`;
   if (intentFilter) {
@@ -47,11 +48,11 @@ export async function fetchTickets(
   if (statusFilter) {
     path += `&status=${encodeURIComponent(statusFilter)}`;
   }
-  return request<TicketsListResponse>(path, {}, userId);
+  return request<TicketsListResponse>(path, { signal }, userId);
 }
 
-export async function fetchTicketDetail(id: string, userId: string = "USR-101"): Promise<TicketDetail> {
-  return request<TicketDetail>(`/api/tickets/${encodeURIComponent(id)}`, {}, userId);
+export async function fetchTicketDetail(id: string, userId: string = "USR-101", signal?: AbortSignal): Promise<TicketDetail> {
+  return request<TicketDetail>(`/api/tickets/${encodeURIComponent(id)}`, { signal }, userId);
 }
 
 export async function createTicket(

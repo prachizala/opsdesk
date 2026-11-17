@@ -89,4 +89,4 @@ OpsDesk implements the operational user journeys specified in **"Zendesk-Darwin 
    - Click one of the **Sample Ticket IDs** (e.g. `TCK-1008`) to inspect the recurring issue.
 3. Click **Export CSV (MVP-6)**:
    - Observe the browser instantly initiating a file download (`opsdesk_tickets_export_YYYY-MM-DD.csv`).
-   - Mention the engineering behind it: memory-safe SQL cursor generator streaming 5,000+ records in ~1.3 seconds with zero memory spike.
+   - Mention the engineering behind it: memory-safe SQL cursor generator streaming 5,000+ records in ~1.3 seconds with chunked generator (design target / unmeasured memory footprint).

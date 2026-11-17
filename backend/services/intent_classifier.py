@@ -68,14 +68,17 @@ def suggest_ticket_intent(subject: str, body: str) -> Tuple[str, str]:
         if pattern.search(text):
             return intent_name, "regex_rule"
 
-    # Step 2: Fallback to Gemini structured call via google-genai SDK
+    # Step 2: Fallback to Gemini structured call via google-genai SDK with strict timeout
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+    timeout_sec = float(os.getenv("GEMINI_TIMEOUT_SECONDS", "3.0"))
 
     if not api_key:
         return "Unclassified", "fallback_unclassified"
 
-    try:
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+
+    def _call_gemini():
         from google import genai
         from google.genai import types
 
@@ -96,8 +99,14 @@ def suggest_ticket_intent(subject: str, body: str) -> Tuple[str, str]:
             contents=prompt,
             config=types.GenerateContentConfig(response_mime_type="application/json")
         )
+        return response.text
 
-        data = json.loads(response.text)
+    executor = ThreadPoolExecutor(max_workers=1)
+    try:
+        future = executor.submit(_call_gemini)
+        response_text = future.result(timeout=timeout_sec)
+
+        data = json.loads(response_text)
         confidence = float(data.get("confidence", 0.0))
         suggested = data.get("suggested_intent", "")
 
@@ -108,5 +117,10 @@ def suggest_ticket_intent(subject: str, body: str) -> Tuple[str, str]:
         return "Unclassified", "fallback_unclassified"
 
     except Exception:
-        # On any API error, network failure, or parsing error, return Unclassified
+        # On any API error, timeout, network failure, or parsing error, return fallback
         return "Unclassified", "fallback_unclassified"
+    finally:
+        try:
+            executor.shutdown(wait=False, cancel_futures=True)
+        except Exception:
+            pass

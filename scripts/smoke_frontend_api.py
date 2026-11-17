@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from fastapi.testclient import TestClient
 from backend.app.database import get_db, Base
+from backend.app.models import Ticket
 from backend.app.main import app
 from backend.seed.seed_data import seed_database
 
@@ -35,6 +36,7 @@ def run_smoke():
     # Set up isolated temp DB
     temp_dir = tempfile.gettempdir()
     db_file = os.path.join(temp_dir, f"smoke_opsdesk_{uuid.uuid4().hex[:8]}.db")
+    print(f"Server Target DB Path: {db_file}")
     engine = create_engine(f"sqlite:///{db_file}", connect_args={"check_same_thread": False})
     Base.metadata.create_all(bind=engine)
     SmokeSession = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -136,8 +138,17 @@ def run_smoke():
         res = client.get("/api/export/tickets.csv", headers={"X-User-Id": "USR-104"})
         assert res.status_code == 200, f"Export CSV failed: {res.text}"
         assert "text/csv" in res.headers.get("content-type", "")
-        lines = res.text.strip().split("\n")
-        print(f"[PASS] 9. GET /api/export/tickets.csv -> 200 OK (streamed {len(lines)} CSV rows, header: {lines[0][:50]}...)")
+        lines = [line for line in res.text.strip().split("\n") if line.strip()]
+        header = lines[0]
+        data_rows = len(lines) - 1
+
+        # Assert against temp DB count
+        check_session = SmokeSession()
+        temp_db_count = check_session.query(Ticket).count()
+        check_session.close()
+
+        assert data_rows == temp_db_count, f"Exported rows {data_rows} != temp DB count {temp_db_count}"
+        print(f"[PASS] 9. GET /api/export/tickets.csv -> 200 OK (streamed {data_rows} rows matching temp DB SELECT COUNT {temp_db_count})")
 
         print("\nALL 9 FRONTEND-BACKEND CONTRACT CHECKS PASSED PERFECTLY!")
     finally:
