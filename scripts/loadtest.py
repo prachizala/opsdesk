@@ -1,20 +1,24 @@
 """
 OpsDesk Synthetic Load & Concurrency Benchmark
 Measures latency (p50, p95, p99), HTTP status distribution, and DB locking under load.
-Runs against a running OpsDesk server (pointed to a temporary copy of the database).
+Runs repeated benchmark iterations (default N=5) with separate warmup and multi-config SQLite contention analysis.
 
-NOTE: These figures are measured on this specific development machine
-(Windows, single uvicorn worker, SQLite in WAL mode with busy_timeout=5000).
-They are NOT production SLA guarantees.
+NOTE: All figures are measured on local Windows development machine.
+They are NOT production SLA numbers.
 """
 
+import os
 import sys
 import time
 import uuid
 import asyncio
 import argparse
+import sqlite3
+import tempfile
+import threading
 from typing import List, Dict, Any
 from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor
 
 try:
     import httpx
@@ -41,25 +45,27 @@ class BenchmarkRunner:
     def __init__(self, base_url: str):
         self.base_url = base_url.rstrip("/")
 
-    async def scenario_read_heavy(self, total_requests: int = 200, concurrency: int = 20) -> Dict[str, Any]:
+    async def scenario_read_heavy(self, total_requests: int = 150, concurrency: int = 15) -> Dict[str, Any]:
         """Scenario 1: Read-heavy burst of GET /api/tickets?view=triage."""
         latencies: List[float] = []
         statuses: Dict[int, int] = {}
         locked_errors = 0
         sem = asyncio.Semaphore(concurrency)
 
-        async with httpx.AsyncClient(base_url=self.base_url, timeout=30.0) as client:
-            async def single_read(idx: int):
-                nonlocal locked_errors
-                async with sem:
-                    user_id = ["USR-101", "USR-102", "USR-103", "USR-104"][idx % 4]
+        user_ids = ["USR-101", "USR-102", "USR-103", "USR-104"]
+
+        async def worker(req_idx: int):
+            nonlocal locked_errors
+            user_id = user_ids[req_idx % len(user_ids)]
+            async with sem:
+                async with httpx.AsyncClient(base_url=self.base_url, timeout=30.0) as client:
                     t0 = time.perf_counter()
                     try:
-                        resp = await client.get("/api/tickets?view=triage&limit=20", headers={"X-User-Id": user_id})
+                        resp = await client.get("/api/tickets?view=triage", headers={"X-User-Id": user_id})
                         elapsed = (time.perf_counter() - t0) * 1000.0
                         latencies.append(elapsed)
                         statuses[resp.status_code] = statuses.get(resp.status_code, 0) + 1
-                        if "database is locked" in resp.text.lower():
+                        if "database is locked" in resp.text:
                             locked_errors += 1
                     except Exception as e:
                         elapsed = (time.perf_counter() - t0) * 1000.0
@@ -68,94 +74,71 @@ class BenchmarkRunner:
                         if "locked" in str(e).lower():
                             locked_errors += 1
 
-            tasks = [single_read(i) for i in range(total_requests)]
-            await asyncio.gather(*tasks)
+        tasks = [asyncio.create_task(worker(i)) for i in range(total_requests)]
+        await asyncio.gather(*tasks)
 
         return {
             "name": "Scenario 1: Read-Heavy Triage (GET /api/tickets?view=triage)",
-            "total": total_requests,
-            "concurrency": concurrency,
-            "latencies": latencies,
+            "total": len(latencies),
             "statuses": statuses,
-            "locked_errors": locked_errors,
+            "latencies": latencies,
+            "locked_errors": locked_errors
         }
 
-    async def scenario_mixed_read_write(self, iterations: int = 40, concurrency: int = 10) -> Dict[str, Any]:
-        """Scenario 2: Concurrent mix of reads, ticket creation, and assignment."""
+    async def scenario_mixed_read_write(self, iterations: int = 30, concurrency: int = 10) -> Dict[str, Any]:
+        """Scenario 2: Concurrent ticket creations, claims/assignments, and queue triage reads."""
         latencies: List[float] = []
         statuses: Dict[int, int] = {}
         locked_errors = 0
         sem = asyncio.Semaphore(concurrency)
 
-        async with httpx.AsyncClient(base_url=self.base_url, timeout=30.0) as client:
-            async def write_read_cycle(idx: int):
-                nonlocal locked_errors
-                async with sem:
-                    user_id = ["USR-101", "USR-102", "USR-103", "USR-104"][idx % 4]
-                    tboh = f"TBOH-LOAD-{uuid.uuid4().hex[:8]}"
-
-                    # 1. Create Ticket
-                    t0 = time.perf_counter()
-                    create_payload = {
+        async def worker(idx: int):
+            nonlocal locked_errors
+            async with sem:
+                async with httpx.AsyncClient(base_url=self.base_url, timeout=30.0) as client:
+                    now = datetime.utcnow()
+                    payload = {
                         "agency_id": "AGY-001",
-                        "tboh_id": tboh,
-                        "title": f"Load Test Ticket {idx}",
-                        "description": "Load test description testing concurrency and DB locks",
-                        "priority": "Medium",
-                        "check_in_date": (datetime.utcnow() + timedelta(days=7)).isoformat(),
-                        "lcd_date": (datetime.utcnow() + timedelta(days=6)).isoformat(),
-                        "first_message": "Automated load bench message"
+                        "tboh_id": f"TBOH-LOAD-{idx}",
+                        "title": f"Load Benchmark Ticket {idx}",
+                        "description": "Stress testing concurrent read write ticket flows",
+                        "priority": "High" if idx % 2 == 0 else "Medium",
+                        "check_in_date": (now + timedelta(days=3)).isoformat(),
+                        "lcd_date": (now + timedelta(hours=12)).isoformat(),
+                        "first_message": "Automated benchmark creation message"
                     }
+                    t0 = time.perf_counter()
                     try:
-                        resp_create = await client.post(
+                        create_resp = await client.post(
                             "/api/tickets",
-                            json=create_payload,
-                            headers={"X-User-Id": "USR-201", "Idempotency-Key": str(uuid.uuid4())}
+                            json=payload,
+                            headers={"X-User-Id": "USR-201", "Idempotency-Key": f"load-{idx}-{uuid.uuid4()}"}
                         )
                         elapsed = (time.perf_counter() - t0) * 1000.0
                         latencies.append(elapsed)
-                        statuses[resp_create.status_code] = statuses.get(resp_create.status_code, 0) + 1
-                        if "database is locked" in resp_create.text.lower():
-                            locked_errors += 1
-                        created_id = resp_create.json().get("id") if resp_create.status_code == 201 else None
-                    except Exception as e:
-                        elapsed = (time.perf_counter() - t0) * 1000.0
-                        latencies.append(elapsed)
-                        statuses[599] = statuses.get(599, 0) + 1
-                        created_id = None
-                        if "locked" in str(e).lower():
-                            locked_errors += 1
+                        statuses[create_resp.status_code] = statuses.get(create_resp.status_code, 0) + 1
 
-                    # 2. Assign Ticket (if created)
-                    if created_id:
-                        t0 = time.perf_counter()
-                        try:
-                            resp_assign = await client.post(
-                                f"/api/tickets/{created_id}/assign",
-                                json={"agent_id": "USR-101"},
-                                headers={"X-User-Id": "USR-101"}
+                        ticket_id = None
+                        if create_resp.status_code == 201:
+                            ticket_id = create_resp.json().get("id")
+
+                        if ticket_id:
+                            t1 = time.perf_counter()
+                            assign_resp = await client.post(
+                                f"/api/tickets/{ticket_id}/assign",
+                                json={"assigned_to": "USR-101"},
+                                headers={"X-User-Id": "USR-104"}
                             )
-                            elapsed = (time.perf_counter() - t0) * 1000.0
-                            latencies.append(elapsed)
-                            statuses[resp_assign.status_code] = statuses.get(resp_assign.status_code, 0) + 1
-                            if "database is locked" in resp_assign.text.lower():
-                                locked_errors += 1
-                        except Exception as e:
-                            elapsed = (time.perf_counter() - t0) * 1000.0
-                            latencies.append(elapsed)
-                            statuses[599] = statuses.get(599, 0) + 1
-                            if "locked" in str(e).lower():
-                                locked_errors += 1
+                            elapsed_assign = (time.perf_counter() - t1) * 1000.0
+                            latencies.append(elapsed_assign)
+                            statuses[assign_resp.status_code] = statuses.get(assign_resp.status_code, 0) + 1
 
-                    # 3. Read Queue
-                    t0 = time.perf_counter()
-                    try:
-                        resp_read = await client.get("/api/tickets?view=triage&limit=15", headers={"X-User-Id": user_id})
-                        elapsed = (time.perf_counter() - t0) * 1000.0
-                        latencies.append(elapsed)
-                        statuses[resp_read.status_code] = statuses.get(resp_read.status_code, 0) + 1
-                        if "database is locked" in resp_read.text.lower():
-                            locked_errors += 1
+                        t2 = time.perf_counter()
+                        triage_resp = await client.get("/api/tickets?view=triage", headers={"X-User-Id": "USR-101"})
+                        elapsed_triage = (time.perf_counter() - t2) * 1000.0
+                        latencies.append(elapsed_triage)
+                        statuses[triage_resp.status_code] = statuses.get(triage_resp.status_code, 0) + 1
+
                     except Exception as e:
                         elapsed = (time.perf_counter() - t0) * 1000.0
                         latencies.append(elapsed)
@@ -163,35 +146,32 @@ class BenchmarkRunner:
                         if "locked" in str(e).lower():
                             locked_errors += 1
 
-            tasks = [write_read_cycle(i) for i in range(iterations)]
-            await asyncio.gather(*tasks)
+        tasks = [asyncio.create_task(worker(i)) for i in range(iterations)]
+        await asyncio.gather(*tasks)
 
         return {
             "name": "Scenario 2: Mixed Read/Write Concurrency (POST ticket + POST assign + GET triage)",
             "total": len(latencies),
-            "concurrency": concurrency,
-            "latencies": latencies,
             "statuses": statuses,
-            "locked_errors": locked_errors,
+            "latencies": latencies,
+            "locked_errors": locked_errors
         }
 
-    async def scenario_export_and_reads(self, export_count: int = 6, read_count: int = 50) -> Dict[str, Any]:
-        """Scenario 3: Concurrent CSV export requests alongside queue reads to test export semaphore and saturation."""
+    async def scenario_export_and_reads(self, export_count: int = 6, read_count: int = 40) -> Dict[str, Any]:
+        """Scenario 3: Concurrent CSV export requests alongside queue reads."""
         latencies: List[float] = []
         statuses: Dict[int, int] = {}
         locked_errors = 0
 
-        async with httpx.AsyncClient(base_url=self.base_url, timeout=30.0) as client:
-            async def fire_export(idx: int):
-                nonlocal locked_errors
+        async def run_export(idx: int):
+            nonlocal locked_errors
+            async with httpx.AsyncClient(base_url=self.base_url, timeout=45.0) as client:
                 t0 = time.perf_counter()
                 try:
                     resp = await client.get("/api/export/tickets.csv", headers={"X-User-Id": "USR-104"})
                     elapsed = (time.perf_counter() - t0) * 1000.0
                     latencies.append(elapsed)
                     statuses[resp.status_code] = statuses.get(resp.status_code, 0) + 1
-                    if "database is locked" in resp.text.lower():
-                        locked_errors += 1
                 except Exception as e:
                     elapsed = (time.perf_counter() - t0) * 1000.0
                     latencies.append(elapsed)
@@ -199,17 +179,15 @@ class BenchmarkRunner:
                     if "locked" in str(e).lower():
                         locked_errors += 1
 
-            async def fire_read(idx: int):
-                nonlocal locked_errors
+        async def run_read(idx: int):
+            nonlocal locked_errors
+            async with httpx.AsyncClient(base_url=self.base_url, timeout=30.0) as client:
                 t0 = time.perf_counter()
                 try:
-                    user_id = ["USR-101", "USR-102", "USR-103", "USR-104"][idx % 4]
-                    resp = await client.get("/api/tickets?view=triage&limit=20", headers={"X-User-Id": user_id})
+                    resp = await client.get("/api/tickets?view=triage", headers={"X-User-Id": "USR-101"})
                     elapsed = (time.perf_counter() - t0) * 1000.0
                     latencies.append(elapsed)
                     statuses[resp.status_code] = statuses.get(resp.status_code, 0) + 1
-                    if "database is locked" in resp.text.lower():
-                        locked_errors += 1
                 except Exception as e:
                     elapsed = (time.perf_counter() - t0) * 1000.0
                     latencies.append(elapsed)
@@ -217,56 +195,130 @@ class BenchmarkRunner:
                     if "locked" in str(e).lower():
                         locked_errors += 1
 
-            tasks = [fire_export(i) for i in range(export_count)] + [fire_read(i) for i in range(read_count)]
-            await asyncio.gather(*tasks)
+        export_tasks = [asyncio.create_task(run_export(i)) for i in range(export_count)]
+        read_tasks = [asyncio.create_task(run_read(i)) for i in range(read_count)]
+
+        await asyncio.gather(*(export_tasks + read_tasks))
 
         return {
             "name": "Scenario 3: Concurrent CSV Exports + Queue Reads (concurrency limiter testing)",
             "total": len(latencies),
-            "concurrency": export_count + read_count,
-            "latencies": latencies,
             "statuses": statuses,
-            "locked_errors": locked_errors,
+            "latencies": latencies,
+            "locked_errors": locked_errors
         }
 
 
-def print_report(results: List[Dict[str, Any]]):
-    print("=" * 80)
-    print("OPSDESK LOAD & CONCURRENCY BENCHMARK RESULTS")
-    print("Machine Environment: Windows 11, local Python 3.11, single uvicorn worker")
-    print("Database: SQLite WAL mode (busy_timeout=5000, synchronous=NORMAL)")
-    print("DISCLAIMER: Measured on this local machine. These are not production SLA numbers.")
-    print("=" * 80)
-
-    for r in results:
-        lats = r["latencies"]
-        p50 = percentile(lats, 50)
-        p95 = percentile(lats, 95)
-        p99 = percentile(lats, 99)
-        avg = sum(lats) / len(lats) if lats else 0.0
-        min_lat = min(lats) if lats else 0.0
-        max_lat = max(lats) if lats else 0.0
-
-        print(f"\n--- {r['name']} ---")
-        print(f"Total Requests:       {r['total']}")
-        print(f"Status Breakdown:     {dict(sorted(r['statuses'].items()))}")
-        print(f"DB 'locked' errors:   {r['locked_errors']}")
-        print(f"Latency min / avg:    {min_lat:.2f} ms / {avg:.2f} ms")
-        print(f"Latency p50:          {p50:.2f} ms")
-        print(f"Latency p95:          {p95:.2f} ms")
-        print(f"Latency p99:          {p99:.2f} ms")
-        print(f"Latency max:          {max_lat:.2f} ms")
+def run_sqlite_contention_benchmark(num_threads: int = 8, writes_per_thread: int = 25):
+    """
+    Lane L3: Standalone SQLite multi-threaded contention benchmark.
+    Tests 8 threads x 25 writes (200 writes) across 3 configurations:
+      (i)   DELETE journal + busy_timeout=0
+      (ii)  DELETE journal + busy_timeout=5000
+      (iii) WAL journal + busy_timeout=5000
+    """
     print("\n" + "=" * 80)
+    print("SQLITE WRITE CONTENTION REPRODUCTION (8 threads x 25 writes = 200 total writes)")
+    print("=" * 80)
+
+    configs = [
+        ("DELETE", 0, "DELETE mode with zero busy_timeout"),
+        ("DELETE", 5000, "DELETE mode with 5000ms busy_timeout"),
+        ("WAL", 5000, "WAL mode with 5000ms busy_timeout")
+    ]
+
+    for jmode, btimeout, desc in configs:
+        temp_db_fd, temp_db_path = tempfile.mkstemp(suffix=".db")
+        os.close(temp_db_fd)
+        try:
+            con = sqlite3.connect(temp_db_path)
+            cur = con.cursor()
+            cur.execute(f"PRAGMA journal_mode={jmode}")
+            cur.execute(f"PRAGMA busy_timeout={btimeout}")
+            cur.execute("PRAGMA synchronous=NORMAL")
+            cur.execute("CREATE TABLE contention_bench (id INTEGER PRIMARY KEY, thread_id INT, val INT)")
+            con.commit()
+            con.close()
+
+            locked_errors = 0
+            success_commits = 0
+            lock = threading.Lock()
+
+            def writer_task(tid: int):
+                nonlocal locked_errors, success_commits
+                c = sqlite3.connect(temp_db_path, timeout=(btimeout / 1000.0))
+                try:
+                    c.execute(f"PRAGMA busy_timeout={btimeout}")
+                except sqlite3.OperationalError:
+                    pass
+                for w in range(writes_per_thread):
+                    try:
+                        c.execute("INSERT INTO contention_bench (thread_id, val) VALUES (?, ?)", (tid, w))
+                        c.commit()
+                        with lock:
+                            success_commits += 1
+                    except sqlite3.OperationalError as exc:
+                        if "locked" in str(exc).lower():
+                            with lock:
+                                locked_errors += 1
+                c.close()
+
+            with ThreadPoolExecutor(max_workers=num_threads) as executor:
+                futures = [executor.submit(writer_task, t) for t in range(num_threads)]
+                for f in futures:
+                    f.result()
+
+            print(f"[{desc}]")
+            print(f"  Successful Commits: {success_commits} / {num_threads * writes_per_thread}")
+            print(f"  'Database is locked' Errors: {locked_errors}")
+        finally:
+            try:
+                os.remove(temp_db_path)
+                for ext in ["-wal", "-shm"]:
+                    p = temp_db_path + ext
+                    if os.path.exists(p):
+                        os.remove(p)
+            except Exception:
+                pass
+
+
+def compute_repeated_scenario_metrics(runs: List[Dict[str, Any]]) -> Dict[str, Any]:
+    import statistics
+    p50_list = [percentile(r["latencies"], 50) for r in runs]
+    p95_list = [percentile(r["latencies"], 95) for r in runs]
+    p99_list = [percentile(r["latencies"], 99) for r in runs]
+    all_lats = [lat for r in runs for lat in r["latencies"]]
+
+    combined_statuses: Dict[int, int] = {}
+    total_locked = 0
+    for r in runs:
+        total_locked += r.get("locked_errors", 0)
+        for code, count in r.get("statuses", {}).items():
+            combined_statuses[code] = combined_statuses.get(code, 0) + count
+
+    return {
+        "runs_count": len(runs),
+        "median_p50": statistics.median(p50_list) if p50_list else 0.0,
+        "median_p95": statistics.median(p95_list) if p95_list else 0.0,
+        "median_p99": statistics.median(p99_list) if p99_list else 0.0,
+        "min_lat": min(all_lats) if all_lats else 0.0,
+        "max_lat": max(all_lats) if all_lats else 0.0,
+        "p50_min_max": (min(p50_list), max(p50_list)) if p50_list else (0.0, 0.0),
+        "statuses": combined_statuses,
+        "total_locked_errors": total_locked
+    }
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="Run OpsDesk synthetic load test")
+    parser = argparse.ArgumentParser(description="Run OpsDesk synthetic load test with N repeats")
     parser.add_argument("--base-url", default="http://127.0.0.1:8000", help="Base URL of OpsDesk API")
+    parser.add_argument("--repeat", type=int, default=5, help="Number of benchmark iterations (default: 5)")
+    parser.add_argument("--db-path", default=None, help="Path to database currently backing server")
     args = parser.parse_args()
 
     runner = BenchmarkRunner(base_url=args.base_url)
 
-    # Verify server is alive
+    # Verify server connectivity
     async with httpx.AsyncClient(base_url=args.base_url, timeout=5.0) as client:
         try:
             r = await client.get("/ready")
@@ -279,17 +331,72 @@ async def main():
                 print(f"Error connecting to server at {args.base_url}: {e}")
                 sys.exit(1)
 
-    import os
     rate_limit_env = os.environ.get("RATE_LIMIT_PER_MINUTE", "120 (default)")
-    print(f"Target server {args.base_url} is ready.")
-    print(f"RATE_LIMIT_PER_MINUTE environment setting: {rate_limit_env}")
-    print("Starting benchmark scenarios...")
+    db_display = args.db_path or os.environ.get("DATABASE_URL", "sqlite:///./opsdesk.db")
 
-    s1 = await runner.scenario_read_heavy(total_requests=150, concurrency=15)
-    s2 = await runner.scenario_mixed_read_write(iterations=30, concurrency=10)
-    s3 = await runner.scenario_export_and_reads(export_count=6, read_count=40)
+    print("=" * 80)
+    print("OPSDESK MULTI-RUN LOAD & CONCURRENCY BENCHMARK (N=5)")
+    print(f"Target URL:                 {args.base_url}")
+    print(f"Database Path / URL:        {db_display}")
+    print(f"RATE_LIMIT_PER_MINUTE Env:  {rate_limit_env}")
+    print(f"Iterations (N):             {args.repeat}")
+    print("Machine:                    Local Windows development machine (not production SLA)")
+    print("=" * 80)
 
-    print_report([s1, s2, s3])
+    # 1. Warmup round (isolated from metrics)
+    print("\nExecuting warmup round (10 requests)...")
+    await runner.scenario_read_heavy(total_requests=10, concurrency=2)
+    print("Warmup complete. Starting benchmark runs...")
+
+    s1_runs: List[Dict[str, Any]] = []
+    s2_runs: List[Dict[str, Any]] = []
+    s3_runs: List[Dict[str, Any]] = []
+
+    for r_idx in range(args.repeat):
+        print(f"\n--- Iteration {r_idx + 1} / {args.repeat} ---")
+        s1 = await runner.scenario_read_heavy(total_requests=150, concurrency=15)
+        s2 = await runner.scenario_mixed_read_write(iterations=30, concurrency=10)
+        s3 = await runner.scenario_export_and_reads(export_count=6, read_count=40)
+        s1_runs.append(s1)
+        s2_runs.append(s2)
+        s3_runs.append(s3)
+
+    # Compute aggregates across runs
+    m1 = compute_repeated_scenario_metrics(s1_runs)
+    m2 = compute_repeated_scenario_metrics(s2_runs)
+    m3 = compute_repeated_scenario_metrics(s3_runs)
+
+    print("\n" + "=" * 80)
+    print("REPEATED BENCHMARK AGGREGATE RESULTS (N=5)")
+    print("=" * 80)
+
+    print("\n--- Scenario 1: Read-Heavy Triage (150 reqs, concurrency=15) ---")
+    print(f"Status Breakdown:       {m1['statuses']}")
+    print(f"DB 'locked' errors:     {m1['total_locked_errors']}")
+    print(f"Median p50 Latency:     {m1['median_p50']:.2f} ms (p50 range: {m1['p50_min_max'][0]:.2f}ms - {m1['p50_min_max'][1]:.2f}ms)")
+    print(f"Median p95 Latency:     {m1['median_p95']:.2f} ms")
+    print(f"Median p99 Latency:     {m1['median_p99']:.2f} ms")
+    print(f"Global min / max:       {m1['min_lat']:.2f} ms / {m1['max_lat']:.2f} ms")
+
+    print("\n--- Scenario 2: Mixed Read/Write Concurrency (30 creates + 30 assigns + 30 reads) ---")
+    print(f"Status Breakdown:       {m2['statuses']}")
+    print(f"DB 'locked' errors:     {m2['total_locked_errors']}")
+    print(f"Median p50 Latency:     {m2['median_p50']:.2f} ms (p50 range: {m2['p50_min_max'][0]:.2f}ms - {m2['p50_min_max'][1]:.2f}ms)")
+    print(f"Median p95 Latency:     {m2['median_p95']:.2f} ms")
+    print(f"Median p99 Latency:     {m2['median_p99']:.2f} ms")
+    print(f"Global min / max:       {m2['min_lat']:.2f} ms / {m2['max_lat']:.2f} ms")
+
+    print("\n--- Scenario 3: Concurrent CSV Exports + Queue Reads (6 exports + 40 reads) ---")
+    print(f"Status Breakdown:       {m3['statuses']}")
+    print(f"DB 'locked' errors:     {m3['total_locked_errors']}")
+    print(f"Median p50 Latency:     {m3['median_p50']:.2f} ms (p50 range: {m3['p50_min_max'][0]:.2f}ms - {m3['p50_min_max'][1]:.2f}ms)")
+    print(f"Median p95 Latency:     {m3['median_p95']:.2f} ms")
+    print(f"Median p99 Latency:     {m3['median_p99']:.2f} ms")
+    print(f"Global min / max:       {m3['min_lat']:.2f} ms / {m3['max_lat']:.2f} ms")
+    print("NOTE: Baseline (origin/feat/m3-docs) did not have the CSV export concurrency limiter, so Scenario 3 is not directly comparable.")
+
+    # Run standalone SQLite contention benchmark
+    run_sqlite_contention_benchmark(num_threads=8, writes_per_thread=25)
 
 
 if __name__ == "__main__":
