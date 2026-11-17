@@ -17,7 +17,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application source
 COPY backend /app/backend
 COPY contracts /app/contracts
-COPY seed /app/seed
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
