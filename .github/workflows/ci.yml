@@ -59,6 +59,9 @@ jobs:
       - name: Run linter
         run: npm run lint
 
+      - name: Run unit and component tests
+        run: npm test
+
       - name: Build Next.js Application
         env:
           NEXT_PUBLIC_API_URL: http://127.0.0.1:8000
