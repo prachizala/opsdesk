@@ -47,10 +47,12 @@ export function Tabs({
       e.preventDefault();
       const nextIndex = (index + 1) % tabs.length;
       onChange(tabs[nextIndex].id);
+      tabRefs.current[nextIndex]?.focus();
     } else if (e.key === "ArrowLeft") {
       e.preventDefault();
       const prevIndex = (index - 1 + tabs.length) % tabs.length;
       onChange(tabs[prevIndex].id);
+      tabRefs.current[prevIndex]?.focus();
     }
   };
 
