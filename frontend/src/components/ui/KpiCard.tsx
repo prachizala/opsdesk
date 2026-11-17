@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, Minus, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Sparkline } from "./Sparkline";
 
@@ -18,6 +18,7 @@ export interface KpiCardProps {
   delta?: KpiDelta;
   icon?: React.ReactNode;
   subtext?: string;
+  onClick?: () => void;
   className?: string;
 }
 
@@ -28,25 +29,51 @@ export function KpiCard({
   delta,
   icon,
   subtext,
+  onClick,
   className,
 }: KpiCardProps) {
+  const isClickable = Boolean(onClick);
+
   return (
     <div
+      onClick={onClick}
+      role={isClickable ? "button" : undefined}
+      tabIndex={isClickable ? 0 : undefined}
+      onKeyDown={
+        isClickable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick?.();
+              }
+            }
+          : undefined
+      }
       className={cn(
-        "bg-surface border border-border rounded-card p-4 shadow-xs flex flex-col justify-between transition-subtle hover:border-border-strong",
+        "group relative bg-surface border border-border rounded-card p-4 shadow-xs flex flex-col justify-between transition-all duration-120",
+        isClickable && "cursor-pointer hover:border-brand-500/50 hover:shadow-sm hover:-translate-y-0.5 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
+        !isClickable && "hover:border-border-strong",
         className
       )}
     >
-      {/* Top Header: Label + Optional Icon */}
+      {/* Top Header: Label + Optional Icon / View Arrow */}
       <div className="flex items-center justify-between gap-2 mb-2">
         <span className="text-caption font-medium text-content-secondary truncate">
           {label}
         </span>
-        {icon && (
-          <div className="w-7 h-7 rounded-input bg-surface-subtle flex items-center justify-center text-content-tertiary shrink-0">
-            {icon}
-          </div>
-        )}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {isClickable && (
+            <span className="text-[11px] font-medium text-brand-600 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+              <span>View</span>
+              <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform duration-120" />
+            </span>
+          )}
+          {icon && (
+            <div className="w-7 h-7 rounded-input bg-surface-subtle flex items-center justify-center text-content-tertiary shrink-0">
+              {icon}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Middle Row: 28px Number + Optional Sparkline */}

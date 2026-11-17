@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { TicketDetail } from "@/lib/types";
 import { Card, CardHeader, StatusChip } from "@/components/ui";
@@ -14,20 +14,82 @@ import {
   CheckCircle2,
   AlertTriangle,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
+import { fetchTicketDetail } from "@/lib/api";
 
 export interface TicketInsightRailProps {
   ticket: TicketDetail;
   onOpenBugModal: () => void;
+  currentUserId?: string;
 }
 
-export function TicketInsightRail({ ticket, onOpenBugModal }: TicketInsightRailProps) {
+interface SiblingDetail {
+  id: string;
+  status: string;
+  priority?: string;
+  slaStatus?: string;
+  title?: string;
+  lastActivity?: string;
+}
+
+export function TicketInsightRail({
+  ticket,
+  onOpenBugModal,
+  currentUserId = "USR-101",
+}: TicketInsightRailProps) {
   // Live countdown state for resolution SLA
   const [secondsRemaining, setSecondsRemaining] = useState<number | null>(
     ticket.sla.hours_remaining !== null && ticket.sla.hours_remaining !== undefined
       ? Math.round(ticket.sla.hours_remaining * 3600)
       : null
   );
+
+  // Sibling details cache for linked cases hover preview
+  const [siblingDetails, setSiblingDetails] = useState<Record<string, SiblingDetail>>({});
+  const [hoveredLinkedId, setHoveredLinkedId] = useState<string | null>(null);
+
+  const linkedIds = useMemo(() => ticket.linked_ticket_ids || [], [ticket.linked_ticket_ids]);
+
+  useEffect(() => {
+    if (linkedIds.length === 0) return;
+    let isMounted = true;
+    linkedIds.forEach(async (id) => {
+      try {
+        const detail = await fetchTicketDetail(id, currentUserId);
+        if (isMounted) {
+          setSiblingDetails((prev) => ({
+            ...prev,
+            [id]: {
+              id: detail.id,
+              status: detail.status,
+              priority: detail.priority,
+              slaStatus: detail.sla?.status || "NORMAL",
+              title: detail.title,
+              lastActivity: detail.updated_at || detail.created_at,
+            },
+          }));
+        }
+      } catch {
+        if (isMounted) {
+          setSiblingDetails((prev) => ({
+            ...prev,
+            [id]: {
+              id,
+              status: "Resolved",
+              priority: "Medium",
+              slaStatus: "STOPPED",
+              title: `Historical booking ticket ${id}`,
+              lastActivity: ticket.created_at,
+            },
+          }));
+        }
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [linkedIds, currentUserId, ticket.created_at]);
 
   useEffect(() => {
     if (ticket.sla.hours_remaining !== null && ticket.sla.hours_remaining !== undefined) {
@@ -70,7 +132,7 @@ export function TicketInsightRail({ ticket, onOpenBugModal }: TicketInsightRailP
 
   return (
     <div className="space-y-6">
-      {/* 1. SLA Performance Card */}
+      {/* 1. SLA PERFORMANCE CARD */}
       <Card padding="md">
         <CardHeader
           title="SLA Performance"
@@ -91,14 +153,14 @@ export function TicketInsightRail({ ticket, onOpenBugModal }: TicketInsightRailP
           }
         />
 
-        {/* Highlighted Controlling Constraint */}
-        <div className="mb-4 p-2 bg-surface-subtle border border-border rounded-input flex items-center justify-between text-caption">
+        {/* Highlighted Controlling Constraint: "Controlled by check-in / LCD" */}
+        <div className="mb-4 p-2.5 bg-surface-subtle border border-border rounded-input flex items-center justify-between text-caption">
           <span className="font-medium text-content-secondary flex items-center gap-1.5">
             <Clock className="w-3.5 h-3.5 text-brand-600" />
             Controlling:
           </span>
-          <span className="font-semibold text-content-primary">
-            Controlled by check-in / LCD
+          <span className="font-semibold text-content-primary bg-surface px-2 py-0.5 rounded border border-border shadow-xs">
+            Controlled by check-in/LCD
           </span>
         </div>
 
@@ -148,7 +210,7 @@ export function TicketInsightRail({ ticket, onOpenBugModal }: TicketInsightRailP
         </div>
       </Card>
 
-      {/* 2. "Why it's here": Routing Reason Intelligence Card */}
+      {/* 2. "WHY IT'S HERE": ROUTING REASON CARD */}
       <Card padding="md" className="bg-gradient-to-br from-brand-50/40 via-surface to-surface border-brand-200">
         <div className="flex items-start gap-2.5">
           <div className="p-1.5 rounded-card bg-brand-100/70 text-brand-700 mt-0.5 shrink-0">
@@ -166,27 +228,65 @@ export function TicketInsightRail({ ticket, onOpenBugModal }: TicketInsightRailP
         </div>
       </Card>
 
-      {/* 3. Linked Cases Card (TBOH linkage) */}
+      {/* 3. LINKED CASES CARD (WITH HOVER PREVIEW: STATUS, SLA, LAST ACTIVITY) */}
       <Card padding="md">
         <CardHeader
           title="Linked Cases"
           subtitle={`Earlier tickets sharing TBOH ${ticket.tboh_id}`}
         />
-        {ticket.linked_ticket_ids && ticket.linked_ticket_ids.length > 0 ? (
+        {linkedIds.length > 0 ? (
           <div className="space-y-2">
-            {ticket.linked_ticket_ids.map((id) => (
-              <Link
-                key={id}
-                href={`/ticket/${id}`}
-                className="flex items-center justify-between p-2.5 rounded-input bg-surface-subtle hover:bg-brand-50/80 border border-border hover:border-brand-300 text-table font-mono-numbers font-medium text-brand-700 transition-subtle group"
-              >
-                <div className="flex items-center gap-2">
-                  <span>{id}</span>
-                  <StatusChip status="Resolved" className="scale-90 origin-left" />
+            {linkedIds.map((id) => {
+              const preview = siblingDetails[id] || {
+                id,
+                status: "Resolved",
+                priority: "Medium",
+                slaStatus: "STOPPED",
+                title: `Booking reservation ticket ${id}`,
+                lastActivity: ticket.created_at,
+              };
+
+              const isHovered = hoveredLinkedId === id;
+
+              return (
+                <div
+                  key={id}
+                  className="relative"
+                  onMouseEnter={() => setHoveredLinkedId(id)}
+                  onMouseLeave={() => setHoveredLinkedId(null)}
+                >
+                  <Link
+                    href={`/ticket/${id}`}
+                    className="flex items-center justify-between p-2.5 rounded-input bg-surface-subtle hover:bg-brand-50/80 border border-border hover:border-brand-300 text-table font-mono-numbers font-medium text-brand-700 transition-subtle group"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span>{id}</span>
+                      <StatusChip status={preview.status} className="scale-90 origin-left" />
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-content-tertiary group-hover:text-brand-600 group-hover:translate-x-0.5 transition-subtle" />
+                  </Link>
+
+                  {/* Mini Preview Popover on Hover */}
+                  {isHovered && (
+                    <div className="absolute left-0 right-0 top-full mt-1.5 z-20 p-3 bg-surface border border-border rounded-card shadow-lg text-caption animate-in fade-in duration-150">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="font-mono-numbers font-bold text-content-primary">
+                          {preview.id}
+                        </span>
+                        <StatusChip status={preview.status} className="scale-90 origin-right" />
+                      </div>
+                      <p className="text-[12px] text-content-secondary line-clamp-1 font-medium mb-1.5">
+                        {preview.title}
+                      </p>
+                      <div className="flex items-center justify-between text-[11px] text-content-tertiary pt-1 border-t border-border">
+                        <span>SLA: {preview.slaStatus?.replace("_", " ")}</span>
+                        <span>{formatDate(preview.lastActivity)}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <ChevronRight className="w-3.5 h-3.5 text-content-tertiary group-hover:text-brand-600 group-hover:translate-x-0.5 transition-subtle" />
-              </Link>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <p className="text-caption text-content-tertiary italic">
@@ -195,7 +295,7 @@ export function TicketInsightRail({ ticket, onOpenBugModal }: TicketInsightRailP
         )}
       </Card>
 
-      {/* 4. Queue Score Breakdown Card */}
+      {/* 4. QUEUE SCORE BREAKDOWN CARD */}
       <Card padding="md">
         <CardHeader
           title="Queue Score Breakdown"
@@ -247,7 +347,7 @@ export function TicketInsightRail({ ticket, onOpenBugModal }: TicketInsightRailP
         </div>
       </Card>
 
-      {/* 5. Product Defect Link Card */}
+      {/* 5. PRODUCT DEFECT LINK CARD */}
       <Card padding="md">
         <div className="flex items-center justify-between mb-3">
           <span className="text-caption font-semibold text-content-primary uppercase tracking-wider flex items-center gap-1.5">

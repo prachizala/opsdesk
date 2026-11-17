@@ -1,7 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { Tooltip } from "./Tooltip";
 
 export interface SlaRingProps {
   status?: "NORMAL" | "AT_RISK" | "BREACHED" | "ESCALATED" | "STOPPED" | "CLOSED" | string;
@@ -9,6 +10,7 @@ export interface SlaRingProps {
   hoursRemaining?: number | null;
   totalHours?: number; // default 24
   size?: number; // 16 to 20px, default 18
+  showTooltip?: boolean;
   className?: string;
 }
 
@@ -18,10 +20,32 @@ export function SlaRing({
   hoursRemaining,
   totalHours = 24,
   size = 18,
+  showTooltip = true,
   className,
 }: SlaRingProps) {
   // Normalize status
   const normalizedStatus = status.toUpperCase();
+
+  // Ticking seconds state for live hover detail
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(
+    hoursRemaining !== null && hoursRemaining !== undefined
+      ? Math.round(hoursRemaining * 3600)
+      : null
+  );
+
+  useEffect(() => {
+    if (hoursRemaining !== null && hoursRemaining !== undefined) {
+      setSecondsLeft(Math.round(hoursRemaining * 3600));
+    }
+  }, [hoursRemaining]);
+
+  useEffect(() => {
+    if (secondsLeft === null || normalizedStatus === "STOPPED" || normalizedStatus === "CLOSED") return;
+    const interval = setInterval(() => {
+      setSecondsLeft((prev) => (prev !== null ? prev - 1 : null));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [secondsLeft, normalizedStatus]);
 
   // Determine progress ratio (0 to 1, fills as deadline approaches)
   let ratio = 0;
@@ -60,22 +84,24 @@ export function SlaRing({
 
   const scheme = colors[normalizedStatus] || colors.NORMAL;
   const isBreached = normalizedStatus === "BREACHED";
+  const pctDisplay = Math.round(ratio * 100);
 
-  return (
+  const ringElement = (
     <div
       className={cn(
-        "inline-flex items-center justify-center shrink-0",
+        "inline-flex items-center justify-center shrink-0 cursor-pointer",
         isBreached && "animate-sla-breach",
         className
       )}
       style={{ width: size, height: size }}
-      aria-hidden="true"
+      aria-label={`SLA Ring: ${pctDisplay}% elapsed`}
     >
       <svg
         width={size}
         height={size}
         viewBox={`0 0 ${size} ${size}`}
         className="rotate-[-90deg] overflow-visible"
+        aria-hidden="true"
       >
         {/* Background track */}
         <circle
@@ -101,5 +127,28 @@ export function SlaRing({
         />
       </svg>
     </div>
+  );
+
+  if (!showTooltip) return ringElement;
+
+  const tooltipContent = (
+    <span className="font-mono-numbers">
+      {pctDisplay}% elapsed
+      {secondsLeft !== null ? (
+        secondsLeft < 0 ? (
+          ` • Breached by ${Math.abs(secondsLeft)}s`
+        ) : (
+          ` • ${secondsLeft}s ticking`
+        )
+      ) : (
+        ""
+      )}
+    </span>
+  );
+
+  return (
+    <Tooltip content={tooltipContent} position="top" delayMs={200}>
+      {ringElement}
+    </Tooltip>
   );
 }

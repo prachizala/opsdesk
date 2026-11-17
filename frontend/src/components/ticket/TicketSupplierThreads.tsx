@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { TicketDetail, DEMO_USERS } from "@/lib/types";
-import { Button, EmptyState } from "@/components/ui";
+import { Button, EmptyState, Tooltip } from "@/components/ui";
 import { Plus, Send, Mail, CheckCircle2 } from "lucide-react";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
@@ -94,23 +94,22 @@ export function TicketSupplierThreads({
 
           {selectedThread && (
             <div className="space-y-3 pt-1">
-              {/* Recipient Pill Row ALWAYS visible at top of thread */}
+              {/* Recipient Pill Row ALWAYS visible at top of thread (hover shows full address) */}
               <div className="p-3 bg-surface-subtle rounded-card border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-caption">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="font-semibold text-content-secondary uppercase text-[11px] tracking-wider">
                     To:
                   </span>
                   {selectedThread.recipients.map((email, idx) => (
-                    <span
-                      key={idx}
-                      className="font-mono-numbers px-2 py-0.5 rounded bg-surface border border-border text-content-primary text-xs shadow-xs"
-                    >
-                      {email}
-                    </span>
+                    <Tooltip key={idx} content={`Full recipient address: ${email}`}>
+                      <span className="font-mono-numbers px-2 py-0.5 rounded bg-surface border border-border text-content-primary text-xs shadow-xs cursor-default hover:border-brand-300 transition-colors">
+                        {email}
+                      </span>
+                    </Tooltip>
                   ))}
                 </div>
                 <div className="text-content-tertiary text-[11px] shrink-0 font-medium">
-                  Subject: <span className="text-content-primary">{selectedThread.subject}</span>
+                  Subject: <span className="text-content-primary font-semibold">{selectedThread.subject}</span>
                 </div>
               </div>
 

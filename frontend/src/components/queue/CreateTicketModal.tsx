@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, X, Check } from "lucide-react";
+import { Sparkles, X, Check, Tag } from "lucide-react";
 import { Modal, Input, Select, Textarea, Button } from "@/components/ui";
 import { useUser } from "@/context/UserContext";
 import { useToast } from "@/context/ToastContext";
@@ -34,7 +34,9 @@ export function CreateTicketModal({
   const [agency, setAgency] = useState("AGY-001");
 
   // Suggest Intent State
-  const [suggestedIntent, setSuggestedIntent] = useState<string | null>(null);
+  const [suggestedIntents, setSuggestedIntents] = useState<
+    { name: string; confidence: number }[]
+  >([]);
   const [suggesting, setSuggesting] = useState(false);
 
   // Submission State
@@ -56,6 +58,16 @@ export function CreateTicketModal({
 
   const isFormValid = isTitleValid && isDescValid && isTbohValid && isCheckinValid;
 
+  // Common quick intent chips
+  const quickIntents = [
+    "Emergency Check-in Assist",
+    "Refund Request",
+    "Cancellation Inconvenience",
+    "Date Amendment",
+    "Bedding / Room Preference",
+    "Voucher Resend",
+  ];
+
   // Auto-Suggest Intent
   const handleSuggest = async () => {
     if (!title.trim() && !desc.trim()) {
@@ -66,24 +78,16 @@ export function CreateTicketModal({
     try {
       const res = await suggestIntent(title, desc, currentUser.id);
       if (res && res.intent) {
-        setSuggestedIntent(res.intent);
+        setSuggestedIntents([
+          { name: res.intent, confidence: Math.round((res.confidence || 0.95) * 100) },
+        ]);
+        showToast(`AI suggested: ${res.intent}`, "info");
       }
     } catch {
       showToast("Unable to auto-suggest intent at this moment.", "warning");
     } finally {
       setSuggesting(false);
     }
-  };
-
-  const handleApplySuggestion = () => {
-    if (suggestedIntent) {
-      setIntent(suggestedIntent);
-      setSuggestedIntent(null);
-    }
-  };
-
-  const handleDismissSuggestion = () => {
-    setSuggestedIntent(null);
   };
 
   // Reset Form
@@ -95,7 +99,7 @@ export function CreateTicketModal({
     setLcd("");
     setIntent("");
     setPriority("Medium");
-    setSuggestedIntent(null);
+    setSuggestedIntents([]);
     setError(null);
     setTouched({});
   };
@@ -152,7 +156,7 @@ export function CreateTicketModal({
 
         {/* Section 1: Booking & Itinerary */}
         <div className="flex flex-col gap-2.5">
-          <h4 className="text-micro-label uppercase text-content-tertiary font-semibold tracking-wider">
+          <h4 className="text-micro-label uppercase text-content-tertiary font-bold tracking-wider">
             1. Booking &amp; Itinerary
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -219,7 +223,7 @@ export function CreateTicketModal({
 
         {/* Section 2: Operations Issue */}
         <div className="flex flex-col gap-2.5 pt-3 border-t border-border">
-          <h4 className="text-micro-label uppercase text-content-tertiary font-semibold tracking-wider">
+          <h4 className="text-micro-label uppercase text-content-tertiary font-bold tracking-wider">
             2. Operations Issue
           </h4>
 
@@ -253,7 +257,7 @@ export function CreateTicketModal({
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
-            <div>
+            <div className="flex flex-col gap-1.5">
               <Select
                 label="Category / Intent"
                 value={intent}
@@ -270,7 +274,8 @@ export function CreateTicketModal({
                 ]}
               />
 
-              <div className="mt-2 flex flex-wrap items-center gap-2">
+              {/* Auto-suggest button & suggested chips */}
+              <div className="flex flex-col gap-1.5 mt-1">
                 <Button
                   type="button"
                   variant="ghost"
@@ -278,33 +283,58 @@ export function CreateTicketModal({
                   loading={suggesting}
                   icon={<Sparkles className="w-3.5 h-3.5 text-brand-600" />}
                   onClick={handleSuggest}
-                  className="text-brand-600 hover:text-brand-700 p-0 text-caption font-medium"
+                  className="text-brand-600 hover:text-brand-700 p-0 text-caption font-medium self-start"
                 >
-                  Auto-suggest intent
+                  Auto-suggest intent from text
                 </Button>
 
-                {suggestedIntent && (
-                  <div className="inline-flex items-center gap-1.5 bg-brand-50 border border-brand-200 px-2 py-0.5 rounded-input text-[11px] text-brand-700">
-                    <span>Suggested: {suggestedIntent}</span>
-                    <button
-                      type="button"
-                      onClick={handleApplySuggestion}
-                      className="font-semibold text-brand-800 hover:text-brand-900 ml-1 cursor-pointer inline-flex items-center gap-0.5"
-                      title="Apply suggested intent"
-                    >
-                      <Check className="w-3 h-3 text-brand-700" />
-                      Apply
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleDismissSuggestion}
-                      className="cursor-pointer text-content-tertiary hover:text-content-primary ml-0.5"
-                      title="Dismiss"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
+                {/* Suggested Intent Chip */}
+                {suggestedIntents.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {suggestedIntents.map((sug) => (
+                      <div
+                        key={sug.name}
+                        className="inline-flex items-center gap-1.5 bg-brand-50 border border-brand-200 px-2 py-0.5 rounded-chip text-[11px] text-brand-700 shadow-2xs"
+                      >
+                        <Tag className="w-3 h-3 text-brand-600" />
+                        <span>
+                          {sug.name} ({sug.confidence}%)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setIntent(sug.name)}
+                          className="font-bold text-brand-800 hover:text-brand-900 ml-1 cursor-pointer inline-flex items-center gap-0.5"
+                          title="Apply suggested intent"
+                        >
+                          <Check className="w-3 h-3 text-brand-700" />
+                          Apply
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSuggestedIntents([])}
+                          className="cursor-pointer text-content-tertiary hover:text-content-primary ml-0.5"
+                          title="Dismiss"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
+
+                {/* Quick select chips */}
+                <div className="flex flex-wrap gap-1 mt-0.5">
+                  {quickIntents.slice(0, 3).map((qi) => (
+                    <button
+                      key={qi}
+                      type="button"
+                      onClick={() => setIntent(qi)}
+                      className="text-[10px] px-1.5 py-0.5 rounded-input bg-surface-subtle hover:bg-surface border border-border text-content-secondary transition-colors cursor-pointer"
+                    >
+                      {qi}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -341,6 +371,7 @@ export function CreateTicketModal({
             size="md"
             disabled={!isFormValid || creating}
             loading={creating}
+            className="bg-brand-600 hover:bg-brand-700 text-white font-medium"
           >
             Dispatch Ticket
           </Button>

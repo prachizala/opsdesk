@@ -5,7 +5,7 @@ import Link from "next/link";
 import { TicketDetail } from "@/lib/types";
 import {
   StatusChip,
-  PriorityChip,
+  PriorityMark,
   SlaBadge,
   SlaRing,
   Button,
@@ -13,12 +13,13 @@ import {
 } from "@/components/ui";
 import {
   ArrowLeft,
-  ChevronRight,
   UserCheck,
   UserX,
   Shuffle,
   ShieldAlert,
+  ChevronDown,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export interface TicketHeaderProps {
   ticket: TicketDetail;
@@ -30,6 +31,7 @@ export interface TicketHeaderProps {
   onStatusChange: (status: string) => Promise<void>;
   onOpenEscalate: () => void;
   onOpenTransfer: () => void;
+  escalatedSuccess?: boolean;
 }
 
 export function TicketHeader({
@@ -42,6 +44,7 @@ export function TicketHeader({
   onStatusChange,
   onOpenEscalate,
   onOpenTransfer,
+  escalatedSuccess = false,
 }: TicketHeaderProps) {
   // Compute valid next states based on status state-machine
   const validNextStatuses = useMemo((): string[] => {
@@ -69,23 +72,29 @@ export function TicketHeader({
 
   return (
     <div className="mb-6">
-      {/* 1. BREADCRUMB */}
+      {/* 1. BREADCRUMB: "Queue / TCK-xxxx" */}
       <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-caption text-content-secondary mb-3">
         <Link
           href="/"
           className="hover:text-content-primary inline-flex items-center gap-1 transition-subtle"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          Queue
+          <span>Queue</span>
         </Link>
-        <ChevronRight className="w-3.5 h-3.5 text-content-tertiary" />
+        <span className="text-content-tertiary">/</span>
         <span className="font-mono-numbers font-semibold text-content-primary">
           {ticket.id}
         </span>
       </nav>
 
       {/* 2. ACTION HEADER CARD */}
-      <div className="bg-surface border border-border rounded-card p-5 shadow-sm">
+      <div
+        className={cn(
+          "bg-surface border border-border rounded-card p-5 shadow-xs transition-all duration-700",
+          escalatedSuccess &&
+            "border-violet-400 ring-2 ring-violet-500/50 bg-violet-50/30 shadow-md shadow-violet-100/50 animate-in fade-in"
+        )}
+      >
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           {/* Metadata & Title */}
           <div className="space-y-2">
@@ -94,7 +103,7 @@ export function TicketHeader({
                 {ticket.id}
               </span>
               <StatusChip status={ticket.status} />
-              <PriorityChip priority={ticket.priority} />
+              <PriorityMark priority={ticket.priority} />
 
               {/* Large SlaBadge + SlaRing Container */}
               <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-surface-subtle rounded-card border border-border">
@@ -120,7 +129,7 @@ export function TicketHeader({
           {/* Action Buttons (Staff Only) */}
           {isStaff && (
             <div className="flex flex-wrap items-center gap-2 shrink-0">
-              {/* Assign / Claim Button */}
+              {/* 1. ASSIGN / CLAIM BUTTON */}
               {isAssignedToMe ? (
                 <Tooltip content="Case is assigned to your active queue">
                   <span>
@@ -141,7 +150,7 @@ export function TicketHeader({
                   icon={<UserCheck className="w-3.5 h-3.5" />}
                   onClick={onClaim}
                 >
-                  Claim Case
+                  Claim (Reassign)
                 </Button>
               ) : (
                 <Button
@@ -150,11 +159,11 @@ export function TicketHeader({
                   icon={<UserCheck className="w-3.5 h-3.5" />}
                   onClick={onClaim}
                 >
-                  Claim (Assign)
+                  Assign to Me
                 </Button>
               )}
 
-              {/* Unassign Button */}
+              {/* 2. UNASSIGN BUTTON */}
               {ticket.assigned_to ? (
                 <Button
                   variant="secondary"
@@ -179,7 +188,7 @@ export function TicketHeader({
                 </Tooltip>
               )}
 
-              {/* Status Switcher Dropdown */}
+              {/* 3. CHANGE STATUS (VALID NEXT STATES ONLY) */}
               <div className="flex items-center">
                 {isClosed && !isLead ? (
                   <Tooltip content="Closed tickets are terminal. Only Operations Leads can reopen.">
@@ -190,25 +199,28 @@ export function TicketHeader({
                     </span>
                   </Tooltip>
                 ) : (
-                  <select
-                    value={ticket.status}
-                    onChange={(e) => onStatusChange(e.target.value)}
-                    className="h-8 px-2.5 bg-surface border border-border rounded-input text-caption font-medium text-content-primary hover:border-border-strong focus:outline-none focus:ring-2 focus:ring-brand-500 transition-subtle cursor-pointer"
-                    aria-label="Change ticket status"
-                  >
-                    <option value={ticket.status} disabled>
-                      Status: {ticket.status}
-                    </option>
-                    {validNextStatuses.map((st) => (
-                      <option key={st} value={st}>
-                        {isClosed && st === "Open" ? "Reopen as Open" : `Mark as ${st}`}
+                  <div className="relative">
+                    <select
+                      value={ticket.status}
+                      onChange={(e) => onStatusChange(e.target.value)}
+                      className="h-8 pl-2.5 pr-7 bg-surface border border-border rounded-input text-caption font-medium text-content-primary hover:border-border-strong focus:outline-none focus:ring-2 focus:ring-brand-500 transition-subtle cursor-pointer appearance-none"
+                      aria-label="Change ticket status"
+                    >
+                      <option value={ticket.status} disabled>
+                        Status: {ticket.status}
                       </option>
-                    ))}
-                  </select>
+                      {validNextStatuses.map((st) => (
+                        <option key={st} value={st}>
+                          {isClosed && st === "Open" ? "Reopen as Open" : `Mark as ${st}`}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-3.5 h-3.5 text-content-tertiary absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
                 )}
               </div>
 
-              {/* Escalate Button (Violet Outline) */}
+              {/* 4. ESCALATE (VIOLET OUTLINE WITH WIPE HOVER) */}
               {isEscalated ? (
                 <Tooltip content="Ticket is already escalated to Operations Escalation Manager">
                   <span>
@@ -218,7 +230,7 @@ export function TicketHeader({
                       className="inline-flex items-center gap-1.5 h-8 px-3 text-caption font-semibold rounded-input border border-violet-200 bg-violet-50 text-violet-400 opacity-60 cursor-not-allowed"
                     >
                       <ShieldAlert className="w-3.5 h-3.5 text-violet-400" />
-                      Escalated
+                      <span>Escalated</span>
                     </button>
                   </span>
                 </Tooltip>
@@ -231,7 +243,7 @@ export function TicketHeader({
                       className="inline-flex items-center gap-1.5 h-8 px-3 text-caption font-semibold rounded-input border border-violet-200 bg-violet-50 text-violet-400 opacity-60 cursor-not-allowed"
                     >
                       <ShieldAlert className="w-3.5 h-3.5 text-violet-400" />
-                      Escalate
+                      <span>Escalate</span>
                     </button>
                   </span>
                 </Tooltip>
@@ -239,14 +251,16 @@ export function TicketHeader({
                 <button
                   type="button"
                   onClick={onOpenEscalate}
-                  className="inline-flex items-center gap-1.5 h-8 px-3 text-caption font-semibold rounded-input border border-violet-400 bg-violet-50/70 text-violet-700 hover:bg-violet-100 hover:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-subtle cursor-pointer"
+                  className="relative overflow-hidden border border-violet-500 text-violet-700 font-semibold rounded-input px-3 h-8 text-caption inline-flex items-center gap-1.5 group transition-colors duration-300 before:absolute before:inset-0 before:bg-violet-600 before:translate-x-[-101%] hover:before:translate-x-0 before:transition-transform before:duration-300 before:ease-out z-0 cursor-pointer shadow-xs focus:outline-none focus:ring-2 focus:ring-violet-500"
                 >
-                  <ShieldAlert className="w-3.5 h-3.5 text-violet-600" />
-                  Escalate
+                  <span className="relative z-10 flex items-center gap-1.5 group-hover:text-white transition-colors duration-300">
+                    <ShieldAlert className="w-3.5 h-3.5 text-violet-600 group-hover:text-white transition-colors duration-300" />
+                    <span>Escalate</span>
+                  </span>
                 </button>
               )}
 
-              {/* Transfer Button */}
+              {/* 5. TRANSFER */}
               {isClosed ? (
                 <Tooltip content="Cannot transfer a closed ticket">
                   <span>

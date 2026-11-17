@@ -21,28 +21,27 @@ export function InsightsHeader({
   onRefresh,
   loading,
 }: InsightsHeaderProps) {
-  const { currentUser, isLead, isStaff } = useUser();
+  const { currentUser, isStaff } = useUser();
   const { showToast } = useToast();
   const [isExporting, setIsExporting] = useState(false);
 
   const rangeOptions = [
-    { label: "Last 7 days", value: 7 },
-    { label: "14 days", value: 14 },
-    { label: "30 days", value: 30 },
+    { label: "This week", value: 7 },
+    { label: "14d", value: 14 },
+    { label: "30d", value: 30 },
   ];
 
   const handleExportCsv = async () => {
-    // Only lead or authorized staff can trigger export
-    if (!isLead) {
+    if (!isStaff) {
       showToast(
-        `CSV export is restricted to Operations Team Lead. Current identity: ${currentUser.role}`,
+        "CSV export is restricted to operational staff members",
         "warning"
       );
       return;
     }
 
     setIsExporting(true);
-    showToast("Preparing download... streaming operational dataset", "info");
+    showToast("Preparing download...", "info");
 
     try {
       const res = await fetch(getExportUrl(), {
@@ -66,71 +65,80 @@ export function InsightsHeader({
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      showToast("Operations report CSV downloaded successfully", "success");
+      showToast("Report CSV downloaded successfully", "success");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Export failed";
-      showToast(`Error exporting report: ${msg}`, "error");
+      showToast(`Unable to export report: ${msg}`, "error");
     } finally {
       setIsExporting(false);
     }
   };
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-border">
+    <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-border">
       {/* Title & Subtitle */}
       <div>
-        <h1 className="text-2xl font-semibold text-content-primary tracking-tight">
-          Operational Insights &amp; Recurring Themes
-        </h1>
-        <p className="text-body text-slate-500 mt-0.5">
-          Real-time clustering of operational drivers, root causes, and systemic friction
+        <div className="flex items-center gap-2.5">
+          <h1 className="text-2xl font-semibold text-content-primary tracking-tight">
+            Operational insights
+          </h1>
+          <span className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-chip bg-brand-50 text-brand-700 border border-brand-200">
+            {days === 7 ? "This week" : `Last ${days} days`}
+          </span>
+        </div>
+        <p className="text-body text-slate-500 mt-1">
+          Clustering of operational drivers, systemic friction, and supplier root causes
         </p>
       </div>
 
       {/* Right Controls */}
       <div className="flex items-center gap-3 flex-wrap">
-        {/* Range Selector: "Last 7 days", "14 days", "30 days" */}
-        <div className="inline-flex items-center bg-surface border border-border rounded-input p-0.5 shadow-xs">
-          <span className="text-[11px] font-semibold text-content-tertiary px-2.5 uppercase tracking-wider hidden xs:inline-block">
-            Window:
-          </span>
-          {rangeOptions.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => onDaysChange(opt.value)}
-              className={cn(
-                "px-3 py-1 rounded-input text-caption font-medium transition-subtle cursor-pointer select-none",
-                days === opt.value
-                  ? "bg-brand-50 text-brand-700 font-semibold border border-brand-200 shadow-xs"
-                  : "text-content-secondary hover:text-content-primary hover:bg-surface-subtle"
-              )}
-            >
-              {opt.label}
-            </button>
-          ))}
+        {/* Range Selector: "This week" / "14d" / "30d" */}
+        <div
+          role="radiogroup"
+          aria-label="Reporting time window"
+          className="inline-flex items-center bg-surface border border-border rounded-input p-1 shadow-xs"
+        >
+          {rangeOptions.map((opt) => {
+            const isSelected = days === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                role="radio"
+                aria-checked={isSelected}
+                onClick={() => onDaysChange(opt.value)}
+                className={cn(
+                  "min-h-[36px] sm:min-h-[32px] px-3 py-1 rounded-input text-caption font-medium transition-subtle cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
+                  isSelected
+                    ? "bg-brand-50 text-brand-700 font-semibold border border-brand-200 shadow-xs"
+                    : "text-content-secondary hover:text-content-primary hover:bg-surface-subtle"
+                )}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* Refresh Action */}
-        <Tooltip content="Refresh analytics window">
+        <Tooltip content="Refresh operational analytics">
           <button
             type="button"
             onClick={onRefresh}
             disabled={loading}
             aria-label="Refresh operational analytics"
-            className="p-2 bg-surface border border-border text-content-secondary hover:text-content-primary rounded-input hover:bg-surface-subtle transition-subtle cursor-pointer disabled:opacity-50 shadow-xs"
+            className="min-h-[44px] min-w-[44px] sm:min-h-[36px] sm:min-w-[36px] p-2 bg-surface border border-border text-content-secondary hover:text-content-primary rounded-input hover:bg-surface-subtle transition-subtle cursor-pointer disabled:opacity-50 shadow-xs flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
             <RefreshCw className={cn("w-4 h-4", loading && "animate-spin text-brand-600")} />
           </button>
         </Tooltip>
 
-        {/* Export CSV Button (secondary button with download icon, staff/lead only) */}
+        {/* Export CSV Button (staff only, shows "Preparing download..." and toast) */}
         <Tooltip
           content={
-            isLead
-              ? "Download uncapped CSV report of tickets and operational metrics"
-              : isStaff
-              ? "CSV export restricted to Team Lead role"
+            isStaff
+              ? "Download uncapped CSV report of operational metrics"
               : "Export requires operational staff access"
           }
         >
@@ -140,13 +148,13 @@ export function InsightsHeader({
             icon={<Download className="w-4 h-4 text-content-secondary" />}
             loading={isExporting}
             onClick={handleExportCsv}
-            disabled={isExporting || !isLead}
-            className="shadow-xs"
+            disabled={isExporting || !isStaff}
+            className="min-h-[44px] sm:min-h-[36px] shadow-xs focus-visible:ring-2 focus-visible:ring-brand-500"
           >
             {isExporting ? "Preparing download..." : "Export CSV"}
           </Button>
         </Tooltip>
       </div>
-    </div>
+    </header>
   );
 }

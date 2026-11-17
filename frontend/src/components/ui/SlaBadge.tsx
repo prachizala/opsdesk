@@ -130,18 +130,18 @@ export function SlaBadge({
     );
   }
 
-  // Breached: red
+  // Breached: red (pulses subtly, pauses on hover)
   if (sla.status === "BREACHED" || (secondsRemaining !== null && secondsRemaining < 0)) {
     const cd = secondsRemaining !== null ? formatCountdown(secondsRemaining) : "";
     return (
       <span
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-chip font-semibold whitespace-nowrap bg-sla-breached-bg text-sla-breached-text select-none shrink-0 leading-none",
+          "inline-flex items-center gap-1.5 rounded-chip font-semibold whitespace-nowrap min-w-[96px] bg-sla-breached-bg text-sla-breached-text select-none shrink-0 leading-none animate-sla-breach hover:[animation-play-state:paused]",
           sizeClasses[size],
           className
         )}
       >
-        {showRing && <SlaRing status="BREACHED" hoursRemaining={sla.hours_remaining} size={ringSize} />}
+        {showRing && <SlaRing status="BREACHED" hoursRemaining={sla.hours_remaining} size={ringSize} showTooltip={false} />}
         <AlertTriangle className={cn(iconSize, "shrink-0")} />
         <span>Breached</span>
         {cd && <span className="font-mono-numbers font-medium">{cd}</span>}

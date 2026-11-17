@@ -1,17 +1,46 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 
 export interface TooltipProps {
   content: React.ReactNode;
   children: React.ReactNode;
   position?: "top" | "bottom" | "left" | "right";
+  delayMs?: number;
   className?: string;
 }
 
-export function Tooltip({ content, children, position = "top", className }: TooltipProps) {
+export function Tooltip({
+  content,
+  children,
+  position = "top",
+  delayMs = 400,
+  className,
+}: TooltipProps) {
   const [visible, setVisible] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const showTooltip = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      setVisible(true);
+    }, delayMs);
+  };
+
+  const hideTooltip = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setVisible(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   const positionStyles = {
     top: "bottom-full left-1/2 -translate-x-1/2 mb-2",
@@ -23,17 +52,17 @@ export function Tooltip({ content, children, position = "top", className }: Tool
   return (
     <div
       className="relative inline-flex items-center"
-      onMouseEnter={() => setVisible(true)}
-      onMouseLeave={() => setVisible(false)}
-      onFocus={() => setVisible(true)}
-      onBlur={() => setVisible(false)}
+      onMouseEnter={showTooltip}
+      onMouseLeave={hideTooltip}
+      onFocus={showTooltip}
+      onBlur={hideTooltip}
     >
       {children}
       {visible && content && (
         <div
           role="tooltip"
           className={cn(
-            "absolute z-50 px-2.5 py-1 text-[11px] font-medium text-white bg-slate-900 rounded-input shadow-md pointer-events-none whitespace-nowrap animate-in fade-in zoom-in-95 duration-120",
+            "absolute z-50 px-2.5 py-1 text-[11px] font-medium text-chrome-text bg-chrome-navy-900 border border-[#1E455A] rounded-input shadow-lg pointer-events-none whitespace-nowrap animate-in fade-in zoom-in-95 duration-120 font-sans",
             positionStyles[position],
             className
           )}

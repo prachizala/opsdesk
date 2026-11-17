@@ -7,3 +7,6 @@ export * from "./QueuePagination";
 export * from "./CreateTicketModal";
 export * from "./MobileFilterSheet";
 export * from "./MobileTicketCard";
+export * from "./DepartureBoardStrip";
+export * from "./QueueCardsView";
+export * from "./QueuePreviewDrawer";

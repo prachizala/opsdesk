@@ -9,6 +9,17 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        chrome: {
+          navy: {
+            900: "var(--chrome-navy-900)",
+            800: "var(--chrome-navy-800)",
+          },
+          text: "var(--chrome-text)",
+          muted: "var(--chrome-muted)",
+        },
+        departure: {
+          amber: "var(--departure-amber)",
+        },
         canvas: "var(--canvas)",
         surface: {
           DEFAULT: "var(--surface)",
@@ -30,6 +41,24 @@ const config: Config = {
           500: "var(--brand-500)",
           600: "var(--brand-600)",
           700: "var(--brand-700)",
+        },
+        region: {
+          mea: {
+            text: "var(--region-mea-text)",
+            bg: "var(--region-mea-bg)",
+          },
+          apac: {
+            text: "var(--region-apac-text)",
+            bg: "var(--region-apac-bg)",
+          },
+          eu: {
+            text: "var(--region-eu-text)",
+            bg: "var(--region-eu-bg)",
+          },
+          amer: {
+            text: "var(--region-amer-text)",
+            bg: "var(--region-amer-bg)",
+          },
         },
         sla: {
           normal: {
@@ -100,6 +129,7 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["var(--font-inter)", "Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
+        heading: ["var(--font-heading)", "Plus Jakarta Sans", "Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
         mono: ["var(--font-mono)", "JetBrains Mono", "ui-monospace", "SFMono-Regular", "monospace"],
       },
       fontSize: {
@@ -129,13 +159,32 @@ const config: Config = {
         sm: "0 1px 2px rgba(15, 23, 42, 0.06)",
         md: "0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.06)",
         lg: "0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.04)",
+        glow: "0 0 16px -2px var(--brand-500)",
+        "glow-amber": "0 0 16px -2px var(--departure-amber)",
       },
       transitionDuration: {
         hover: "var(--duration-hover)",
         panel: "var(--duration-panel)",
       },
+      keyframes: {
+        "sla-breach-pulse": {
+          "0%, 100%": { opacity: "1", transform: "scale(1)" },
+          "50%": { opacity: "0.7", transform: "scale(1.08)" },
+        },
+        "shine-sweep": {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(200%)" },
+        },
+        "flap-flip": {
+          "0%": { transform: "rotateX(0deg)" },
+          "50%": { transform: "rotateX(-90deg)" },
+          "100%": { transform: "rotateX(0deg)" },
+        },
+      },
       animation: {
         "sla-breach": "sla-breach-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+        "shine": "shine-sweep 0.75s ease-in-out",
+        "flap": "flap-flip 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
       },
     },
   },
