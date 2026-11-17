@@ -195,13 +195,13 @@ export function TopNav() {
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full select-none pointer-events-none transition-subtle">
+    <header className="sticky top-0 z-40 w-full bg-canvas/95 backdrop-blur-md border-b border-border/40 py-2.5 px-3 sm:px-6 transition-colors select-none shadow-xs">
       {/* 1. Full-width API Unreachable Error State Banner */}
       {isApiDown && (
         <div
           role="alert"
           aria-live="assertive"
-          className="pointer-events-auto w-full bg-red-600 dark:bg-red-950 border-b border-red-700 dark:border-red-800 px-4 py-2 text-caption text-white dark:text-red-200 transition-subtle shadow-md"
+          className="w-full -mt-2.5 -mx-3 sm:-mx-6 mb-2 bg-red-600 dark:bg-red-950 border-b border-red-700 dark:border-red-800 px-4 py-2 text-caption text-white dark:text-red-200 transition-subtle shadow-md"
         >
           <div className="max-w-[1440px] mx-auto flex items-center justify-center gap-3 flex-wrap">
             <div className="flex items-center gap-2">
@@ -223,27 +223,26 @@ export function TopNav() {
         </div>
       )}
 
-      <div className="pt-3 px-3 sm:px-6">
-        {/* 2. Slim demo-auth banner (32px, dismissible per session) */}
-        {!isBannerDismissed && !isApiDown && (
-          <div className="pointer-events-auto max-w-[1440px] mx-auto mb-2 bg-amber-500/10 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-700/50 rounded-full h-8 px-4 text-[12px] text-amber-800 dark:text-amber-300 flex items-center justify-between transition-subtle font-medium shadow-xs">
-            <div className="flex items-center gap-2 mx-auto">
-              <ShieldAlert className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-              <span>Demo authentication — identity is client-supplied and not secure.</span>
-            </div>
-            <button
-              type="button"
-              onClick={handleDismissBanner}
-              aria-label="Dismiss demo authentication banner"
-              className="text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 p-1 rounded-full transition-subtle cursor-pointer shrink-0"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
+      {/* 2. Slim demo-auth banner (32px, dismissible per session) */}
+      {!isBannerDismissed && !isApiDown && (
+        <div className="max-w-[1440px] mx-auto mb-2 bg-amber-500/10 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-700/50 rounded-full h-8 px-4 text-[12px] text-amber-800 dark:text-amber-300 flex items-center justify-between transition-subtle font-medium shadow-xs">
+          <div className="flex items-center gap-2 mx-auto">
+            <ShieldAlert className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span>Demo authentication — identity is client-supplied and not secure.</span>
           </div>
-        )}
+          <button
+            type="button"
+            onClick={handleDismissBanner}
+            aria-label="Dismiss demo authentication banner"
+            className="text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 p-1 rounded-full transition-subtle cursor-pointer shrink-0"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
-      {/* 3. Floating Pill Top Bar (surface, fully rounded, shadow sm, 12-16px margin from edges, sticky) */}
-      <div className="pointer-events-auto w-full max-w-[1440px] mx-auto h-14 bg-surface/95 backdrop-blur-md border border-border rounded-full shadow-sm px-4 sm:px-6 flex items-center justify-between gap-4 transition-subtle">
+      {/* 3. Floating Pill Top Bar (surface, fully rounded, shadow sm, sticky with solid opaque surface) */}
+      <div className="w-full max-w-[1440px] mx-auto h-14 bg-surface border border-border rounded-full shadow-sm px-4 sm:px-6 flex items-center justify-between gap-4 transition-subtle">
         {/* Left: Geometric flight-path 'O' logo mark + 'OpsDesk' */}
         <div className="flex items-center gap-3 shrink-0">
           <Link
@@ -429,7 +428,6 @@ export function TopNav() {
           </div>
         </div>
       </div>
-    </div>
     </header>
   );
 }

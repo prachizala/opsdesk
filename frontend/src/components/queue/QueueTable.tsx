@@ -172,7 +172,7 @@ export function QueueTable({
       <table className="w-full text-left border-collapse table-fixed select-none">
         {/* Table Header */}
         <thead>
-          <tr className="border-b border-border bg-surface-subtle text-micro-label uppercase text-content-tertiary sticky top-0 z-20 h-10 select-none">
+          <tr className="border-b border-border bg-surface-subtle text-micro-label uppercase text-content-tertiary sticky top-[76px] z-20 h-10 select-none shadow-xs">
             <th className="px-3 w-9 text-center font-medium">#</th>
             <th className="px-3 w-[130px] font-medium">SLA Status</th>
             <th className="px-3 font-medium">Ticket</th>
@@ -195,7 +195,7 @@ export function QueueTable({
           {buckets.map((bucket) => (
             <React.Fragment key={bucket.name}>
               {/* Sticky Time-Bucket Header */}
-              <tr className="sticky top-10 z-10 bg-surface-subtle/95 backdrop-blur-xs border-y border-border h-7 text-micro-label uppercase font-bold tracking-wider">
+              <tr className="sticky top-[116px] z-10 bg-surface-subtle border-y border-border h-7 text-micro-label uppercase font-bold tracking-wider shadow-xs">
                 <td colSpan={totalCols} className="px-3 py-1">
                   <div className="flex items-center gap-2">
                     <span
