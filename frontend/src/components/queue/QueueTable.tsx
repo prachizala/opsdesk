@@ -172,18 +172,18 @@ export function QueueTable({
       <table className="w-full text-left border-collapse table-fixed select-none">
         {/* Table Header */}
         <thead>
-          <tr className="border-b border-border bg-surface-subtle text-micro-label uppercase text-content-tertiary sticky top-[76px] z-20 h-10 select-none shadow-xs">
-            <th className="px-3 w-9 text-center font-medium">#</th>
-            <th className="px-3 w-[130px] font-medium">SLA Status</th>
-            <th className="px-3 font-medium">Ticket</th>
-            <th className="px-3 w-[90px] hidden lg:table-cell font-medium">Agency</th>
-            <th className="px-3 w-[110px] hidden md:table-cell font-medium">Intent</th>
-            <th className="px-3 w-[80px] font-medium">Priority</th>
-            <th className="px-3 w-[76px] font-medium">Status</th>
-            <th className="px-3 w-[175px] max-w-[175px] font-medium">Dates</th>
-            <th className="px-3 w-[110px] hidden min-[1200px]:table-cell font-medium">Assignee</th>
+          <tr className="border-b border-border bg-surface-subtle text-micro-label uppercase text-content-tertiary h-10 select-none">
+            <th className="px-3 w-9 text-center font-medium bg-surface-subtle">#</th>
+            <th className="px-3 w-[130px] font-medium bg-surface-subtle">SLA Status</th>
+            <th className="px-3 font-medium bg-surface-subtle">Ticket</th>
+            <th className="px-3 w-[90px] hidden lg:table-cell font-medium bg-surface-subtle">Agency</th>
+            <th className="px-3 w-[110px] hidden md:table-cell font-medium bg-surface-subtle">Intent</th>
+            <th className="px-3 w-[80px] font-medium bg-surface-subtle">Priority</th>
+            <th className="px-3 w-[76px] font-medium bg-surface-subtle">Status</th>
+            <th className="px-3 w-[175px] max-w-[175px] font-medium bg-surface-subtle">Dates</th>
+            <th className="px-3 w-[110px] hidden min-[1200px]:table-cell font-medium bg-surface-subtle">Assignee</th>
             {isStaff && (
-              <th className="px-3 w-[54px] text-right hidden min-[1280px]:table-cell font-medium">
+              <th className="px-3 w-[54px] text-right hidden min-[1280px]:table-cell font-medium bg-surface-subtle">
                 Score
               </th>
             )}
@@ -194,9 +194,9 @@ export function QueueTable({
         <tbody>
           {buckets.map((bucket) => (
             <React.Fragment key={bucket.name}>
-              {/* Sticky Time-Bucket Header */}
-              <tr className="sticky top-[116px] z-10 bg-surface-subtle border-y border-border h-7 text-micro-label uppercase font-bold tracking-wider shadow-xs">
-                <td colSpan={totalCols} className="px-3 py-1">
+              {/* Time-Bucket Group Header */}
+              <tr className="border-y border-border bg-surface-subtle h-8 text-micro-label uppercase font-bold tracking-wider">
+                <td colSpan={totalCols} className="px-3 py-1.5 bg-surface-subtle">
                   <div className="flex items-center gap-2">
                     <span
                       className={cn(
@@ -476,7 +476,7 @@ export function QueueTable({
 
                     {/* 8. Dates: compact FlightPathTimeline strip + "Check-in in 2d 4h / LCD 3 Dec" */}
                     <td className="px-3 w-[175px] max-w-[175px] overflow-hidden">
-                      <div className="flex flex-col justify-center text-[11px] font-mono-numbers leading-tight min-w-0 w-[175px] max-w-[175px] overflow-hidden">
+                      <div className="flex flex-col justify-center text-[11px] font-mono-numbers leading-tight min-w-0 w-full max-w-full overflow-hidden">
                         <div className="truncate">
                           <span
                             className={cn(

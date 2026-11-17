@@ -89,24 +89,21 @@ export function FlightPathTimeline({
 
   // Compact Variant (~20px height for table rows, overflow-hidden)
   if (variant === "compact") {
-    const formattedLcd = lcd ? formatDate(lcd).split(",")[0] : null;
-    const formattedCheckin = checkIn ? formatDate(checkIn).split(",")[0] : null;
-
     return (
       <div
         className={cn(
-          "flex items-center gap-1.5 h-5 text-[10px] font-mono-numbers select-none w-full max-w-full overflow-hidden",
+          "flex items-center gap-1.5 h-4 text-[10px] font-mono-numbers select-none w-full max-w-full overflow-hidden",
           className
         )}
         title={`Flight Path: NOW -> LCD Gate (${lcd ? formatDate(lcd) : "None"}) -> Check-in (${checkIn ? formatDate(checkIn) : "None"})`}
       >
-        <span className="text-content-tertiary font-medium text-[10px] flex items-center gap-0.5 shrink-0">
+        <span className="text-content-tertiary font-medium text-[10px] flex items-center gap-1 shrink-0">
           <Plane className={cn("w-3 h-3 rotate-45 shrink-0", planeColorClass)} />
           <span>NOW</span>
         </span>
 
-        {/* Responsive Track */}
-        <div className="relative flex-1 min-w-[28px] h-1 bg-surface-subtle rounded-full flex items-center border border-border shrink overflow-visible">
+        {/* Responsive Track spanning available width */}
+        <div className="relative flex-1 min-w-[32px] h-1 bg-surface-subtle rounded-full flex items-center border border-border overflow-visible mx-0.5">
           <div className="absolute inset-0 border-b border-dashed border-border-strong top-0" />
           {/* LCD Gate Marker */}
           <div
@@ -115,10 +112,10 @@ export function FlightPathTimeline({
               isLcdPast
                 ? "bg-slate-400 border-slate-300"
                 : effectiveControlling === "LCD"
-                ? "bg-amber-500 border-white ring-2 ring-amber-400/30"
+                ? "bg-amber-500 border-white ring-2 ring-amber-400/40"
                 : "bg-brand-orange border-white"
             )}
-            title={lcd ? `LCD Gate: ${formatDate(lcd)}` : "No LCD"}
+            title={lcd ? `LCD Gate: ${formatDate(lcd)}` : "No LCD deadline"}
           />
           {/* Check-in Marker */}
           <div
@@ -127,46 +124,29 @@ export function FlightPathTimeline({
               isCheckInPast
                 ? "bg-slate-400 border-slate-300"
                 : effectiveControlling === "CHECK_IN"
-                ? "bg-brand-orange border-white ring-2 ring-brand-orange/30"
+                ? "bg-brand-orange border-white ring-2 ring-brand-orange/40"
                 : "bg-slate-400 border-white"
             )}
-            title={checkIn ? `Check-in: ${formatDate(checkIn)}` : "No Check-in"}
+            title={checkIn ? `Check-in: ${formatDate(checkIn)}` : "No check-in date"}
           />
         </div>
 
-        {/* Milestone indicators */}
-        <div className="flex items-center gap-1 shrink-0 text-[10px]">
-          {formattedLcd && (
-            <span
-              className={cn(
-                "px-1.5 py-0.5 rounded-full font-medium truncate max-w-[68px]",
-                isLcdPast
-                  ? "text-content-disabled line-through"
-                  : effectiveControlling === "LCD"
-                  ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 font-semibold border border-amber-200 dark:border-amber-800"
-                  : "text-content-tertiary"
-              )}
-              title={`LCD Gate: ${formatDate(lcd)}`}
-            >
-              Gate {formattedLcd}
-            </span>
+        {/* Concise Controlling milestone indicator */}
+        <span
+          className={cn(
+            "text-[9px] font-medium uppercase tracking-wider shrink-0 px-1 py-0.2 rounded font-mono-numbers",
+            effectiveControlling === "LCD"
+              ? "text-amber-700 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60"
+              : "text-brand-orange-text bg-brand-50 dark:bg-orange-950/40 dark:text-brand-orange border border-orange-200/60 dark:border-orange-800/60"
           )}
-          {formattedCheckin && (
-            <span
-              className={cn(
-                "px-1.5 py-0.5 rounded-full font-medium truncate max-w-[68px]",
-                isCheckInPast
-                  ? "text-content-disabled line-through"
-                  : effectiveControlling === "CHECK_IN"
-                  ? "bg-brand-50 text-brand-orange-text dark:bg-orange-950/40 dark:text-brand-orange font-semibold border border-orange-200 dark:border-orange-800"
-                  : "text-content-tertiary"
-              )}
-              title={`Check-in: ${formatDate(checkIn)}`}
-            >
-              In {formattedCheckin}
-            </span>
-          )}
-        </div>
+          title={
+            effectiveControlling === "LCD"
+              ? `Controlled by LCD Gate (${lcd ? formatDate(lcd) : "N/A"})`
+              : `Controlled by Check-in (${checkIn ? formatDate(checkIn) : "N/A"})`
+          }
+        >
+          {effectiveControlling === "LCD" ? "Gate" : "In"}
+        </span>
       </div>
     );
   }
