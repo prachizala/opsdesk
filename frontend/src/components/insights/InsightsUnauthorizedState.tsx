@@ -19,11 +19,11 @@ export function InsightsUnauthorizedState({
       </div>
 
       <h2 className="text-xl font-semibold text-content-primary mb-2 tracking-tight">
-        Restricted Operational Console
+        Restricted operational console
       </h2>
 
       <p className="text-body text-content-secondary mb-3 leading-relaxed">
-        The <strong>Operational Insights &amp; Recurring Themes</strong> dashboard is restricted to{" "}
+        The <strong>Operational insights &amp; recurring themes</strong> dashboard is restricted to{" "}
         <strong>Team Lead</strong> and <strong>Escalation Manager</strong> roles.
       </p>
 
@@ -36,8 +36,9 @@ export function InsightsUnauthorizedState({
           variant="primary"
           size="md"
           icon={<ArrowLeft className="w-4 h-4" />}
+          className="min-h-[44px] focus-visible:ring-2 focus-visible:ring-brand-500"
         >
-          Return to Operations Queue
+          Return to operations queue
         </Button>
       </Link>
     </div>
