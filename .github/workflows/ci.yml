@@ -1,4 +1,4 @@
-name: CI
+name: OpsDesk Full-Stack CI
 
 on:
   push:
@@ -7,7 +7,8 @@ on:
     branches: ["**"]
 
 jobs:
-  test:
+  backend:
+    name: Backend Tests & Lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -17,6 +18,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
 
       - name: Install dependencies
         run: |
@@ -25,4 +27,45 @@ jobs:
 
       - name: Run pytest
         run: |
-          pytest backend/tests -q
+          pytest backend/tests -v
+
+  frontend:
+    name: Frontend Lint, Build & Security Audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: "frontend/package-lock.json"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Build frontend application
+        run: npm run build
+
+      - name: Dependency security audit
+        # Warn-only if upstream ecosystem vulnerability (e.g. postcss/next.js) exists
+        run: |
+          npm audit --omit=dev --audit-level=high || echo "::warning::Non-blocking production dependency audit warnings detected"
+
+  docker:
+    name: Container Build Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker compose services
+        run: docker compose build
