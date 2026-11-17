@@ -20,13 +20,17 @@ def test_rate_limit_ip_rotation_contradiction_resolution(client: TestClient, mon
     user_ids = ["USR-101", "USR-102", "USR-103", "USR-104"]
     status_counts = {}
 
-    for i in range(150):
-        user_id = user_ids[i % len(user_ids)]
-        resp = client.get("/api/tickets?view=triage", headers={"X-User-Id": user_id})
-        status_counts[resp.status_code] = status_counts.get(resp.status_code, 0) + 1
+    try:
+        for i in range(150):
+            user_id = user_ids[i % len(user_ids)]
+            resp = client.get("/api/tickets?view=triage", headers={"X-User-Id": user_id})
+            status_counts[resp.status_code] = status_counts.get(resp.status_code, 0) + 1
 
-    print("\n[RAW B1 COUNTS] 150 requests from single IP with 4 rotating users:", status_counts)
+        print("\n[RAW B1 COUNTS] 150 requests from single IP with 4 rotating users:", status_counts)
 
-    # Exactly 120 requests succeed before IP threshold is breached
-    assert status_counts.get(200, 0) == 120, f"Expected 120x 200 OK, got {status_counts}"
-    assert status_counts.get(429, 0) == 30, f"Expected 30x 429 Too Many Requests, got {status_counts}"
+        # Exactly 120 requests succeed before IP threshold is breached
+        assert status_counts.get(200, 0) == 120, f"Expected 120x 200 OK, got {status_counts}"
+        assert status_counts.get(429, 0) == 30, f"Expected 30x 429 Too Many Requests, got {status_counts}"
+    finally:
+        with main_module._rate_limit_lock:
+            main_module._rate_limit_records.clear()
