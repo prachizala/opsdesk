@@ -195,7 +195,7 @@ export function TopNav() {
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-canvas/95 backdrop-blur-md border-b border-border/40 py-2.5 px-3 sm:px-6 transition-colors select-none shadow-xs">
+    <header className="sticky top-0 z-40 w-full bg-canvas border-b border-border py-2.5 px-3 sm:px-6 transition-colors select-none shadow-xs">
       {/* 1. Full-width API Unreachable Error State Banner */}
       {isApiDown && (
         <div
