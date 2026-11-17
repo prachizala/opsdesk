@@ -195,49 +195,52 @@ export function TopNav() {
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full pt-3 px-3 sm:px-6 select-none pointer-events-none transition-subtle">
-      {/* 1. API Unreachable Error State Banner */}
+    <header className="sticky top-0 z-40 w-full select-none pointer-events-none transition-subtle">
+      {/* 1. Full-width API Unreachable Error State Banner */}
       {isApiDown && (
         <div
           role="alert"
           aria-live="assertive"
-          className="pointer-events-auto max-w-[1440px] mx-auto mb-2 bg-red-950/90 border border-red-800/80 rounded-full min-h-9 px-4 py-1 text-caption text-red-200 flex items-center justify-between transition-subtle shadow-md"
+          className="pointer-events-auto w-full bg-red-600 dark:bg-red-950 border-b border-red-700 dark:border-red-800 px-4 py-2 text-caption text-white dark:text-red-200 transition-subtle shadow-md"
         >
-          <div className="flex items-center gap-2 mx-auto flex-wrap justify-center">
-            <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-            <span className="font-medium text-[12px]">
-              Can&apos;t reach the server. Retrying in {retryingIn}s...
-            </span>
+          <div className="max-w-[1440px] mx-auto flex items-center justify-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-white dark:text-red-400 shrink-0" />
+              <span className="font-medium text-[12px] sm:text-[13px]">
+                Can&apos;t reach the server. Retrying in {retryingIn}s...
+              </span>
+            </div>
             <button
               type="button"
               onClick={checkApiHealth}
               disabled={isRetrying}
-              className="underline font-semibold hover:text-white ml-2 cursor-pointer disabled:opacity-50 inline-flex items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 rounded-full px-2 py-0.5 text-[11px]"
+              className="min-h-[32px] px-3 py-1 bg-white/20 hover:bg-white/30 dark:bg-red-900/50 dark:hover:bg-red-900 text-white font-semibold rounded-input cursor-pointer disabled:opacity-50 inline-flex items-center gap-1.5 text-[11px] sm:text-[12px] transition-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
             >
-              <RefreshCw className={cn("w-3 h-3", isRetrying && "animate-spin")} />
+              <RefreshCw className={cn("w-3.5 h-3.5", isRetrying && "animate-spin")} />
               Retry now
             </button>
           </div>
         </div>
       )}
 
-      {/* 2. Slim demo-auth banner (32px, dismissible per session) */}
-      {!isBannerDismissed && !isApiDown && (
-        <div className="pointer-events-auto max-w-[1440px] mx-auto mb-2 bg-amber-500/10 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-700/50 rounded-full h-8 px-4 text-[12px] text-amber-800 dark:text-amber-300 flex items-center justify-between transition-subtle font-medium shadow-xs">
-          <div className="flex items-center gap-2 mx-auto">
-            <ShieldAlert className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-            <span>Demo authentication — identity is client-supplied and not secure.</span>
+      <div className="pt-3 px-3 sm:px-6">
+        {/* 2. Slim demo-auth banner (32px, dismissible per session) */}
+        {!isBannerDismissed && !isApiDown && (
+          <div className="pointer-events-auto max-w-[1440px] mx-auto mb-2 bg-amber-500/10 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-700/50 rounded-full h-8 px-4 text-[12px] text-amber-800 dark:text-amber-300 flex items-center justify-between transition-subtle font-medium shadow-xs">
+            <div className="flex items-center gap-2 mx-auto">
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span>Demo authentication — identity is client-supplied and not secure.</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleDismissBanner}
+              aria-label="Dismiss demo authentication banner"
+              className="text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 p-1 rounded-full transition-subtle cursor-pointer shrink-0"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={handleDismissBanner}
-            aria-label="Dismiss demo authentication banner"
-            className="text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 p-1 rounded-full transition-subtle cursor-pointer shrink-0"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
+        )}
 
       {/* 3. Floating Pill Top Bar (surface, fully rounded, shadow sm, 12-16px margin from edges, sticky) */}
       <div className="pointer-events-auto w-full max-w-[1440px] mx-auto h-14 bg-surface/95 backdrop-blur-md border border-border rounded-full shadow-sm px-4 sm:px-6 flex items-center justify-between gap-4 transition-subtle">
@@ -426,6 +429,7 @@ export function TopNav() {
           </div>
         </div>
       </div>
+    </div>
     </header>
   );
 }

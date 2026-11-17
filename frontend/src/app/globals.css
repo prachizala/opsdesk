@@ -337,14 +337,16 @@
   perspective: 300px;
 }
 
-/* Accessibility: respects reduced motion preference */
+/* Accessibility: respects reduced motion preference (removes ALL animation) */
 @media (prefers-reduced-motion: reduce) {
   *,
   ::before,
   ::after {
-    animation-duration: 0.01ms !important;
+    animation: none !important;
+    animation-duration: 0ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    transition: none !important;
+    transition-duration: 0ms !important;
     scroll-behavior: auto !important;
   }
 

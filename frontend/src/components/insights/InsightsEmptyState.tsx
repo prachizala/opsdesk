@@ -14,13 +14,13 @@ export function InsightsEmptyState({
 }: InsightsEmptyStateProps) {
   return (
     <div className="py-16 px-6 text-center max-w-lg mx-auto space-y-5 group select-none">
-      {/* Mission Control: Paper plane over dotted route illustration */}
+      {/* Paper-plane-over-dotted-route illustration (plane floats slightly on hover) */}
       <div className="w-32 h-32 mx-auto relative flex items-center justify-center">
-        {/* Subtle mission control radar wash */}
-        <div className="absolute inset-0 bg-brand-500/10 rounded-full blur-xl" />
+        {/* Subtle ambient radar wash */}
+        <div className="absolute inset-0 bg-brand-orange/10 rounded-full blur-xl" />
 
         <svg
-          className="w-28 h-28 text-brand-600 relative z-10 overflow-visible"
+          className="w-28 h-28 text-brand-orange dark:text-brand-orange-text relative z-10 overflow-visible"
           viewBox="0 0 120 120"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
@@ -76,33 +76,33 @@ export function InsightsEmptyState({
           {/* Dotted flight trajectory / waypoint route */}
           <path
             d="M 18 92 C 32 68, 54 48, 86 34"
-            stroke="#0B7F8B"
+            stroke="var(--brand-orange)"
             strokeWidth="2"
             strokeDasharray="3 4"
             strokeLinecap="round"
           />
 
           {/* Departure waypoint marker */}
-          <circle cx="18" cy="92" r="3.5" fill="#0B7F8B" />
-          <circle cx="18" cy="92" r="7" stroke="#0B7F8B" strokeWidth="1" strokeOpacity="0.3" />
+          <circle cx="18" cy="92" r="3.5" fill="var(--brand-orange)" />
+          <circle cx="18" cy="92" r="7" stroke="var(--brand-orange)" strokeWidth="1" strokeOpacity="0.3" />
 
           {/* Paper plane that floats slightly on hover */}
           <g className="transition-transform duration-300 ease-out transform group-hover:-translate-y-2 group-hover:translate-x-1.5 motion-reduce:transform-none">
             {/* Plane body */}
             <path
               d="M 88 30 L 66 38 L 74 48 Z"
-              fill="#0B7F8B"
+              fill="var(--brand-orange)"
               className="drop-shadow-xs"
             />
             {/* Plane wing fold */}
             <path
               d="M 88 30 L 74 48 L 78 54 Z"
-              fill="#08636D"
+              fill="var(--brand-700)"
             />
             {/* Plane underside fold */}
             <path
               d="M 74 48 L 78 54 L 79 49 Z"
-              fill="#05454C"
+              fill="var(--brand-orange-navy)"
             />
             {/* Trailing motion plume */}
             <line
@@ -110,7 +110,7 @@ export function InsightsEmptyState({
               y1="40"
               x2="52"
               y2="44"
-              stroke="#0B7F8B"
+              stroke="var(--brand-orange)"
               strokeWidth="1.5"
               strokeLinecap="round"
               strokeOpacity="0.4"
@@ -130,7 +130,12 @@ export function InsightsEmptyState({
 
       {days < 30 && onExpandWindow && (
         <div className="pt-2">
-          <Button variant="secondary" size="sm" onClick={onExpandWindow}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onExpandWindow}
+            className="min-h-[44px] sm:min-h-[36px] focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+          >
             Expand to 30-day window
           </Button>
         </div>

@@ -76,17 +76,21 @@ export function InsightsHeader({
 
   return (
     <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-border">
-      {/* Title & Subtitle */}
+      {/* Eyebrow label + two-tone H1 ("Operational Insights") */}
       <div>
-        <div className="flex items-center gap-2.5">
-          <h1 className="text-2xl font-semibold text-content-primary tracking-tight">
-            Operational insights
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-brand-orange dark:text-brand-orange-text mb-1">
+          Operational intelligence
+        </p>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <h1 className="text-2xl sm:text-3xl font-heading font-bold tracking-tight text-content-primary">
+            <span>Operational </span>
+            <span className="text-brand-orange dark:text-brand-orange-text">Insights</span>
           </h1>
-          <span className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-chip bg-brand-50 text-brand-700 border border-brand-200">
+          <span className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-chip bg-brand-50 text-brand-700 dark:bg-brand-50/20 dark:text-brand-orange-text border border-brand-200 dark:border-brand-500/30">
             {days === 7 ? "This week" : `Last ${days} days`}
           </span>
         </div>
-        <p className="text-body text-slate-500 mt-1">
+        <p className="text-body text-content-secondary mt-1">
           Clustering of operational drivers, systemic friction, and supplier root causes
         </p>
       </div>
@@ -109,9 +113,9 @@ export function InsightsHeader({
                 aria-checked={isSelected}
                 onClick={() => onDaysChange(opt.value)}
                 className={cn(
-                  "min-h-[36px] sm:min-h-[32px] px-3 py-1 rounded-input text-caption font-medium transition-subtle cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
+                  "min-h-[44px] sm:min-h-[32px] px-3 py-1 rounded-input text-caption font-medium transition-subtle cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas",
                   isSelected
-                    ? "bg-brand-50 text-brand-700 font-semibold border border-brand-200 shadow-xs"
+                    ? "bg-brand-50 text-brand-700 dark:bg-brand-50/20 dark:text-brand-orange-text font-semibold border border-brand-200 dark:border-brand-500/30 shadow-xs"
                     : "text-content-secondary hover:text-content-primary hover:bg-surface-subtle"
                 )}
               >
@@ -128,13 +132,13 @@ export function InsightsHeader({
             onClick={onRefresh}
             disabled={loading}
             aria-label="Refresh operational analytics"
-            className="min-h-[44px] min-w-[44px] sm:min-h-[36px] sm:min-w-[36px] p-2 bg-surface border border-border text-content-secondary hover:text-content-primary rounded-input hover:bg-surface-subtle transition-subtle cursor-pointer disabled:opacity-50 shadow-xs flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            className="min-h-[44px] min-w-[44px] sm:min-h-[36px] sm:min-w-[36px] p-2 bg-surface border border-border text-content-secondary hover:text-content-primary rounded-input hover:bg-surface-subtle transition-subtle cursor-pointer disabled:opacity-50 shadow-xs flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
           >
-            <RefreshCw className={cn("w-4 h-4", loading && "animate-spin text-brand-600")} />
+            <RefreshCw className={cn("w-4 h-4", loading && "animate-spin text-brand-orange")} />
           </button>
         </Tooltip>
 
-        {/* Export CSV Button (staff only, shows "Preparing download..." and toast) */}
+        {/* Staff-only Export CSV Button */}
         <Tooltip
           content={
             isStaff
@@ -149,7 +153,7 @@ export function InsightsHeader({
             loading={isExporting}
             onClick={handleExportCsv}
             disabled={isExporting || !isStaff}
-            className="min-h-[44px] sm:min-h-[36px] shadow-xs focus-visible:ring-2 focus-visible:ring-brand-500"
+            className="min-h-[44px] sm:min-h-[36px] shadow-xs focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
           >
             {isExporting ? "Preparing download..." : "Export CSV"}
           </Button>
