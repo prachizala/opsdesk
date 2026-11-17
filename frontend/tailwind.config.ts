@@ -48,6 +48,10 @@ const config: Config = {
             text: "var(--sla-escalated-text)",
             bg: "var(--sla-escalated-bg)",
           },
+          stopped: {
+            text: "var(--sla-stopped-text)",
+            bg: "var(--sla-stopped-bg)",
+          },
         },
         priority: {
           urgent: {
@@ -99,6 +103,13 @@ const config: Config = {
         mono: ["var(--font-mono)", "JetBrains Mono", "ui-monospace", "SFMono-Regular", "monospace"],
       },
       fontSize: {
+        11: ["11px", { lineHeight: "14px", letterSpacing: "0.05em" }],
+        12: ["12px", { lineHeight: "16px" }],
+        13: ["13px", { lineHeight: "20px" }],
+        14: ["14px", { lineHeight: "20px" }],
+        16: ["16px", { lineHeight: "24px" }],
+        20: ["20px", { lineHeight: "28px" }],
+        28: ["28px", { lineHeight: "36px" }],
         caption: ["12px", { lineHeight: "16px" }],
         table: ["13px", { lineHeight: "20px" }],
         body: ["14px", { lineHeight: "20px" }],
@@ -109,10 +120,12 @@ const config: Config = {
       },
       borderRadius: {
         input: "var(--radius-input)",
+        chip: "var(--radius-chip)",
         card: "var(--radius-card)",
         modal: "var(--radius-modal)",
       },
       boxShadow: {
+        xs: "0 1px 2px rgba(15, 23, 42, 0.04)",
         sm: "0 1px 2px rgba(15, 23, 42, 0.06)",
         md: "0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.06)",
         lg: "0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.04)",
@@ -120,6 +133,9 @@ const config: Config = {
       transitionDuration: {
         hover: "var(--duration-hover)",
         panel: "var(--duration-panel)",
+      },
+      animation: {
+        "sla-breach": "sla-breach-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
       },
     },
   },
