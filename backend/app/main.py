@@ -65,8 +65,52 @@ RATE_LIMIT_PER_MINUTE = int(os.environ.get("RATE_LIMIT_PER_MINUTE", "120"))
 RATE_LIMIT_MAX_KEYS = int(os.environ.get("RATE_LIMIT_MAX_KEYS", "10000"))
 RATE_LIMIT_WINDOW = 60.0  # seconds
 
+IDEMPOTENCY_TTL_HOURS = int(os.environ.get("IDEMPOTENCY_TTL_HOURS", "24"))
+APP_ENV = os.environ.get("APP_ENV", "development").lower()
+ALLOW_DEMO_AUTH = os.environ.get("ALLOW_DEMO_AUTH", "false").lower() in ("true", "1", "yes")
+
 _rate_limit_lock = threading.Lock()
 _rate_limit_records: Dict[str, List[float]] = {}
+
+
+def validate_production_auth_settings():
+    """
+    Refuses startup when running in production environment with demo authentication,
+    unless explicitly overridden via ALLOW_DEMO_AUTH=true.
+    """
+    env = os.environ.get("APP_ENV", "development").lower()
+    allow_demo = os.environ.get("ALLOW_DEMO_AUTH", "false").lower() in ("true", "1", "yes")
+    if env == "production" and not allow_demo:
+        msg = "Refusing to start in APP_ENV=production with unauthenticated demo headers (X-User-Id) unless ALLOW_DEMO_AUTH=true is explicitly set."
+        logger.error(msg)
+        raise RuntimeError(msg)
+    elif env == "production" and allow_demo:
+        logger.warning("WARNING: APP_ENV=production is running with demo authentication because ALLOW_DEMO_AUTH=true is set. Ensure this is intentional!")
+
+
+def purge_expired_idempotency_records(db: Session) -> int:
+    """
+    Assumption: Purges in-database idempotency records older than IDEMPOTENCY_TTL_HOURS (default 24).
+    """
+    cutoff = datetime.utcnow() - timedelta(hours=IDEMPOTENCY_TTL_HOURS)
+    deleted = db.query(IdempotencyRecord).filter(IdempotencyRecord.created_at < cutoff).delete(synchronize_session=False)
+    db.commit()
+    return deleted
+
+
+@app.on_event("startup")
+def on_app_startup():
+    validate_production_auth_settings()
+    if not os.environ.get("PYTEST_CURRENT_TEST"):
+        try:
+            from backend.app.database import SessionLocal, engine, ensure_schema_migrations
+            ensure_schema_migrations(engine)
+            with SessionLocal() as db:
+                purged = purge_expired_idempotency_records(db)
+                if purged > 0:
+                    logger.info(f'{{"event": "idempotency_startup_purge", "purged": {purged}}}')
+        except Exception as exc:
+            logger.warning(f"Startup maintenance warning: {exc}")
 
 @app.middleware("http")
 async def opsdesk_protection_middleware(request: Request, call_next):
@@ -381,19 +425,25 @@ def create_ticket(
     5. Atomic EventOutbox row emission and AuditLog.
     6. Idempotent request deduplication via Idempotency-Key header.
     """
-    # 0. Check idempotency cache
-    # Assumption: In-database SQLite idempotency records are retained indefinitely; in production 24h Redis TTL is used.
+    # 0. Check idempotency cache with lazy TTL expiration
+    # Assumption: In-database SQLite idempotency records are purged based on IDEMPOTENCY_TTL_HOURS (default 24h); in production 24h Redis TTL is used.
     current_payload_hash = hashlib.sha256(payload.model_dump_json().encode("utf-8")).hexdigest()
     if idempotency_key:
         record_id = f"{current_user.id}:{idempotency_key}"
+        cutoff = datetime.utcnow() - timedelta(hours=IDEMPOTENCY_TTL_HOURS)
         existing_record = db.query(IdempotencyRecord).filter(IdempotencyRecord.id == record_id).first()
         if existing_record:
-            if existing_record.request_hash and existing_record.request_hash != current_payload_hash:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Conflict: Idempotency-Key was already used with a different request payload."
-                )
-            return json.loads(existing_record.response_json)
+            if existing_record.created_at and existing_record.created_at < cutoff:
+                db.delete(existing_record)
+                db.commit()
+                existing_record = None
+            else:
+                if existing_record.request_hash and existing_record.request_hash != current_payload_hash:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Conflict: Idempotency-Key was already used with a different request payload."
+                    )
+                return json.loads(existing_record.response_json)
 
     # 1. Strict agency determination
     if current_user.role == "Requester":
