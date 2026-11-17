@@ -14,6 +14,16 @@ export interface FlightPathTimelineProps {
   className?: string;
 }
 
+/**
+ * FlightPathTimeline:
+ * Dotted arc/track: NOW -> LCD gate -> Check-in with small plane marker.
+ * - LCD gate marker clearly indicated
+ * - Plane is orange (#EA580C / #F97316)
+ * - Plane turns yellow-amber (#A16207 / #FACC15) when approaching gate (< 2h)
+ * - Plane turns red (#B91C1C / #F87171) after passing gate
+ * - Controlling deadline highlighted and labelled
+ * - Compact (table row, overflow-hidden, no layout shifts) and full (ticket) variants
+ */
 export function FlightPathTimeline({
   nowDate,
   lcd,
@@ -36,21 +46,22 @@ export function FlightPathTimeline({
     (lcdTime && !isLcdPast ? "LCD" : checkInTime && !isCheckInPast ? "CHECK_IN" : "LCD");
 
   // Plane color based on progress toward LCD gate:
-  // Approaching gate (< 2 hours or ratio > 0.75): amber #FFB020
-  // Past gate: red #B91C1C
-  // Otherwise brand teal #0E9AA7
-  let planeColor = "#0E9AA7"; // brand teal
+  // Brand orange by default; turns yellow-amber approaching gate (< 2h); red after it.
+  let planeColorClass = "text-brand-orange";
+  let planeColorHex = "#EA580C";
   if (isLcdPast) {
-    planeColor = "#B91C1C"; // breached/past gate
+    planeColorClass = "text-red-600 dark:text-red-400";
+    planeColorHex = "#B91C1C";
   } else if (lcdTime !== null) {
     const hoursToLcd = (lcdTime - now) / (1000 * 60 * 60);
     if (hoursToLcd <= 2) {
-      planeColor = "#D97706"; // amber approaching gate
+      planeColorClass = "text-amber-600 dark:text-amber-400";
+      planeColorHex = "#A16207";
     }
   }
 
   // Calculate plane progress position (0 to 100%)
-  let planeProgressPct = 15; // default starting point
+  let planeProgressPct = 15;
   if (lcdTime && checkInTime) {
     const totalSpan = checkInTime - now;
     if (totalSpan <= 0) {
@@ -76,7 +87,7 @@ export function FlightPathTimeline({
     });
   };
 
-  // Compact Variant (~20px height for table rows)
+  // Compact Variant (~20px height for table rows, overflow-hidden)
   if (variant === "compact") {
     const formattedLcd = lcd ? formatDate(lcd).split(",")[0] : null;
     const formattedCheckin = checkIn ? formatDate(checkIn).split(",")[0] : null;
@@ -84,39 +95,39 @@ export function FlightPathTimeline({
     return (
       <div
         className={cn(
-          "flex items-center gap-1.5 h-4 text-[10px] font-mono-numbers select-none w-full max-w-full overflow-hidden",
+          "flex items-center gap-1.5 h-5 text-[10px] font-mono-numbers select-none w-full max-w-full overflow-hidden",
           className
         )}
         title={`Flight Path: NOW -> LCD Gate (${lcd ? formatDate(lcd) : "None"}) -> Check-in (${checkIn ? formatDate(checkIn) : "None"})`}
       >
         <span className="text-content-tertiary font-medium text-[10px] flex items-center gap-0.5 shrink-0">
-          <Plane className="w-2.5 h-2.5 rotate-45 shrink-0" style={{ color: planeColor }} />
+          <Plane className={cn("w-3 h-3 rotate-45 shrink-0", planeColorClass)} />
           <span>NOW</span>
         </span>
 
         {/* Responsive Track */}
-        <div className="relative flex-1 min-w-[24px] h-1 bg-surface-subtle rounded-full flex items-center border border-border shrink overflow-visible">
+        <div className="relative flex-1 min-w-[28px] h-1 bg-surface-subtle rounded-full flex items-center border border-border shrink overflow-visible">
           <div className="absolute inset-0 border-b border-dashed border-border-strong top-0" />
           {/* LCD Gate Marker */}
           <div
             className={cn(
-              "absolute left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full border",
+              "absolute left-1/2 -translate-x-1/2 w-2 h-2 rounded-full border",
               isLcdPast
                 ? "bg-slate-400 border-slate-300"
                 : effectiveControlling === "LCD"
-                ? "bg-departure-amber border-amber-300 ring-1 ring-amber-200"
-                : "bg-brand-600 border-white"
+                ? "bg-amber-500 border-white ring-2 ring-amber-400/30"
+                : "bg-brand-orange border-white"
             )}
             title={lcd ? `LCD Gate: ${formatDate(lcd)}` : "No LCD"}
           />
           {/* Check-in Marker */}
           <div
             className={cn(
-              "absolute right-0 w-1.5 h-1.5 rounded-full border",
+              "absolute right-0 w-2 h-2 rounded-full border",
               isCheckInPast
                 ? "bg-slate-400 border-slate-300"
                 : effectiveControlling === "CHECK_IN"
-                ? "bg-brand-600 border-brand-300 ring-1 ring-brand-200"
+                ? "bg-brand-orange border-white ring-2 ring-brand-orange/30"
                 : "bg-slate-400 border-white"
             )}
             title={checkIn ? `Check-in: ${formatDate(checkIn)}` : "No Check-in"}
@@ -128,11 +139,11 @@ export function FlightPathTimeline({
           {formattedLcd && (
             <span
               className={cn(
-                "px-1 py-0.2 rounded font-medium truncate max-w-[62px]",
+                "px-1.5 py-0.5 rounded-full font-medium truncate max-w-[68px]",
                 isLcdPast
                   ? "text-content-disabled line-through"
                   : effectiveControlling === "LCD"
-                  ? "bg-amber-50 text-amber-700 font-semibold border border-amber-200"
+                  ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 font-semibold border border-amber-200 dark:border-amber-800"
                   : "text-content-tertiary"
               )}
               title={`LCD Gate: ${formatDate(lcd)}`}
@@ -143,11 +154,11 @@ export function FlightPathTimeline({
           {formattedCheckin && (
             <span
               className={cn(
-                "px-1 py-0.2 rounded font-medium truncate max-w-[62px]",
+                "px-1.5 py-0.5 rounded-full font-medium truncate max-w-[68px]",
                 isCheckInPast
                   ? "text-content-disabled line-through"
                   : effectiveControlling === "CHECK_IN"
-                  ? "bg-brand-50 text-brand-700 font-semibold border border-brand-200"
+                  ? "bg-brand-50 text-brand-orange-text dark:bg-orange-950/40 dark:text-brand-orange font-semibold border border-orange-200 dark:border-orange-800"
                   : "text-content-tertiary"
               )}
               title={`Check-in: ${formatDate(checkIn)}`}
@@ -174,17 +185,17 @@ export function FlightPathTimeline({
           <path
             d="M 20 36 Q 200 6, 380 36"
             fill="none"
-            stroke="#CBD2DC"
+            stroke="currentColor"
             strokeWidth="2"
             strokeDasharray="4 4"
+            className="text-border-strong"
           />
           {/* Active progress arc segment */}
           <path
             d={isLcdPast ? "M 20 36 Q 200 6, 380 36" : "M 20 36 Q 110 20, 200 21"}
             fill="none"
-            stroke={isLcdPast ? "#94A3B8" : "#0E9AA7"}
+            stroke={isLcdPast ? "#94A3B8" : planeColorHex}
             strokeWidth="2.5"
-            strokeDasharray={isLcdPast ? "none" : "none"}
           />
         </svg>
 
@@ -197,11 +208,11 @@ export function FlightPathTimeline({
           }}
         >
           <div
-            className="w-6 h-6 rounded-full bg-surface border border-border shadow-xs flex items-center justify-center transition-colors"
-            style={{ borderColor: planeColor }}
+            className="w-7 h-7 rounded-full bg-surface border-2 shadow-xs flex items-center justify-center transition-colors"
+            style={{ borderColor: planeColorHex }}
             title={`Plane position: ${isLcdPast ? "Past LCD Gate" : "En route"}`}
           >
-            <Plane className="w-3.5 h-3.5 rotate-45" style={{ color: planeColor }} />
+            <Plane className={cn("w-4 h-4 rotate-45", planeColorClass)} />
           </div>
         </div>
 
@@ -213,7 +224,7 @@ export function FlightPathTimeline({
               isLcdPast
                 ? "bg-slate-300 border-slate-400"
                 : effectiveControlling === "LCD"
-                ? "bg-departure-amber border-white ring-4 ring-amber-100"
+                ? "bg-amber-500 border-white ring-4 ring-amber-400/20"
                 : "bg-surface border-border-strong"
             )}
           >
@@ -229,7 +240,7 @@ export function FlightPathTimeline({
               isCheckInPast
                 ? "bg-slate-300 border-slate-400"
                 : effectiveControlling === "CHECK_IN"
-                ? "bg-brand-600 border-white ring-4 ring-brand-100"
+                ? "bg-brand-orange border-white ring-4 ring-brand-orange/20"
                 : "bg-surface border-border-strong"
             )}
           />
@@ -257,14 +268,14 @@ export function FlightPathTimeline({
                 isLcdPast
                   ? "text-content-disabled line-through"
                   : effectiveControlling === "LCD"
-                  ? "text-amber-800 font-semibold"
+                  ? "text-amber-700 dark:text-amber-400 font-semibold"
                   : "text-content-secondary"
               )}
             >
               LCD Gate
             </span>
             {effectiveControlling === "LCD" && !isLcdPast && (
-              <span className="text-[10px] font-semibold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200 px-1 py-0.2 rounded">
+              <span className="text-[10px] font-semibold uppercase tracking-wider bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800 px-1.5 py-0.5 rounded-full">
                 Controlling
               </span>
             )}
@@ -285,7 +296,7 @@ export function FlightPathTimeline({
         <div className="flex flex-col items-end text-right">
           <div className="flex items-center gap-1">
             {effectiveControlling === "CHECK_IN" && !isCheckInPast && (
-              <span className="text-[10px] font-semibold uppercase tracking-wider bg-brand-50 text-brand-700 border border-brand-200 px-1 py-0.2 rounded">
+              <span className="text-[10px] font-semibold uppercase tracking-wider bg-brand-50 text-brand-orange-text dark:bg-orange-950/40 dark:text-brand-orange border border-orange-200 dark:border-orange-800 px-1.5 py-0.5 rounded-full">
                 Controlling
               </span>
             )}
@@ -295,7 +306,7 @@ export function FlightPathTimeline({
                 isCheckInPast
                   ? "text-content-disabled line-through"
                   : effectiveControlling === "CHECK_IN"
-                  ? "text-brand-800 font-semibold"
+                  ? "text-brand-orange-text dark:text-brand-orange font-semibold"
                   : "text-content-secondary"
               )}
             >

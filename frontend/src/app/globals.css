@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:ital,wght@0,500;0,600;0,700;1,500;1,600;1,700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -10,47 +10,53 @@
   --font-heading: "Plus Jakarta Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* Airport Control Tower Chrome Tokens (Navy-900 / Navy-800) */
-  --chrome-navy-900: #0B1F2A;
-  --chrome-navy-800: #12303F;
-  --chrome-text: #E6F1F5;
-  --chrome-muted: #8FB0BD;
+  /* Airport Control Tower Chrome Tokens (Navy) */
+  --chrome-navy-900: #0F172A;
+  --chrome-navy-800: #1E293B;
+  --chrome-text: #F1F5F9;
+  --chrome-muted: #94A3B8;
   --departure-amber: #FFB020;
 
-  /* Canvas & Surface Tokens */
-  --canvas: #F5F7FA;
+  /* Canvas & Surface Tokens — Light Mode */
+  --canvas: #F8FAFC;
   --surface: #FFFFFF;
-  --surface-subtle: #EEF2F6;
-  --border: #E3E7ED;
-  --border-strong: #CBD2DC;
+  --surface-subtle: #F1F5F9;
+  --border: #E2E8F0;
+  --border-strong: #CBD5E1;
 
-  /* Typography Tokens (Contrast >= 4.5:1 on white) */
+  /* Typography Tokens — Light Mode */
   --text-primary: #0F172A;
   --text-secondary: #475569;
   --text-tertiary: #64748B;
   --text-disabled: #94A3B8;
+  --text-muted: #94A3B8;
 
-  /* Brand Tokens (Ocean Teal) */
-  --brand-50: #ECFEFF;
-  --brand-100: #CFFAFE;
-  --brand-500: #0E9AA7;
-  --brand-600: #0B7F8B;
-  --brand-700: #0A6772;
+  /* Brand / Orange Accent Tokens — Light Mode (Udaan Palette) */
+  --brand-orange: #EA580C;
+  --brand-orange-fill: #EA580C;
+  --brand-orange-text: #C2410C;
+  --brand-orange-navy: #0F172A;
+  --brand-50: #FFF7ED;
+  --brand-100: #FFEDD5;
+  --brand-500: #EA580C;
+  --brand-600: #EA580C;
+  --brand-700: #C2410C;
+  --orange-tint: rgba(234, 88, 12, 0.08);
 
-  /* SLA Semantic Tokens */
+  /* SLA Semantic Tokens — Light Mode (Never color alone) */
   --sla-normal-text: #15803D;
   --sla-normal-bg: #DCFCE7;
-  --sla-at-risk-text: #B45309;
-  --sla-at-risk-bg: #FEF3C7;
+  --sla-at-risk-text: #A16207;
+  --sla-at-risk-bg: #FEF9C3;
   --sla-breached-text: #B91C1C;
   --sla-breached-bg: #FEE2E2;
   --sla-escalated-text: #6D28D9;
   --sla-escalated-bg: #EDE9FE;
   --sla-stopped-text: #64748B;
-  --sla-stopped-bg: #F1F3F6;
+  --sla-stopped-bg: #F1F5F9;
 
-  /* Region Tokens (Small tags/flags) */
-  --region-mea-text: #D97706;
+  /* Region Tokens (Muted Hues) */
+  --region-mea-text: #B45309;
   --region-mea-bg: #FEF3C7;
   --region-apac-text: #0D9488;
   --region-apac-bg: #CCFBF1;
@@ -59,46 +65,138 @@
   --region-amer-text: #7C3AED;
   --region-amer-bg: #EDE9FE;
 
-  /* Priority Tokens (Neutral-to-warm tones, red reserved for Breached) */
-  --priority-urgent-text: #B45309;
-  --priority-urgent-bg: #FEF3C7;
-  --priority-high-text: #C2410C;
-  --priority-high-bg: #FFEDD5;
-  --priority-medium-text: #1D4ED8;
-  --priority-medium-bg: #DBEAFE;
-  --priority-low-text: #64748B;
-  --priority-low-bg: #F1F3F6;
+  /* Priority Tokens — Muted Slate Tones Only (NO red/orange chips) */
+  --priority-urgent-text: #334155;
+  --priority-urgent-bg: #E2E8F0;
+  --priority-high-text: #475569;
+  --priority-high-bg: #F1F5F9;
+  --priority-medium-text: #64748B;
+  --priority-medium-bg: #F8FAFC;
+  --priority-low-text: #94A3B8;
+  --priority-low-bg: #F8FAFC;
 
-  /* Status Tokens (Soft Tint, No Border) */
+  /* Status Tokens */
   --status-new-text: #1D4ED8;
   --status-new-bg: #EFF6FF;
-  --status-open-text: #0E9AA7;
-  --status-open-bg: #ECFEFF;
-  --status-pending-text: #B45309;
-  --status-pending-bg: #FEF3C7;
+  --status-open-text: #C2410C;
+  --status-open-bg: #FFF7ED;
+  --status-pending-text: #A16207;
+  --status-pending-bg: #FEF9C3;
   --status-escalated-text: #6D28D9;
   --status-escalated-bg: #EDE9FE;
   --status-resolved-text: #15803D;
   --status-resolved-bg: #DCFCE7;
   --status-closed-text: #64748B;
-  --status-closed-bg: #F1F3F6;
+  --status-closed-bg: #F1F5F9;
 
-  /* Geometry & Radius */
-  --radius-input: 6px;
-  --radius-chip: 6px;
-  --radius-card: 10px;
-  --radius-modal: 14px;
+  /* Focus Ring: 2px orange ring with 2px offset */
+  --focus-ring: #EA580C;
 
-  /* Motion Tokens */
+  /* Geometry & Radii */
+  --radius-input: 8px;
+  --radius-chip: 9999px;
+  --radius-card: 12px;
+  --radius-modal: 24px;
+  --radius-panel: 24px;
+
+  /* Motion & Duration */
   --duration-hover: 120ms;
   --duration-panel: 180ms;
-  --tooltip-delay: 400ms;
   --ease-out: cubic-bezier(0, 0, 0.2, 1);
+}
+
+[data-theme="dark"],
+.dark {
+  /* Control Tower Chrome Tokens — Dark Mode */
+  --chrome-navy-900: #0F172A;
+  --chrome-navy-800: #1E293B;
+  --chrome-text: #F1F5F9;
+  --chrome-muted: #94A3B8;
+  --departure-amber: #FACC15;
+
+  /* Canvas & Surface Tokens — Dark Mode */
+  --canvas: #0B1120;
+  --surface: #0F172A;
+  --surface-subtle: #1E293B;
+  --border: #1E293B;
+  --border-strong: #334155;
+
+  /* Typography Tokens — Dark Mode */
+  --text-primary: #F1F5F9;
+  --text-secondary: #CBD5E1;
+  --text-tertiary: #94A3B8;
+  --text-disabled: #64748B;
+  --text-muted: #64748B;
+
+  /* Brand / Orange Accent Tokens — Dark Mode */
+  --brand-orange: #F97316;
+  --brand-orange-fill: #F97316;
+  --brand-orange-text: #FB923C;
+  --brand-orange-navy: #0F172A;
+  --brand-50: rgba(249, 115, 22, 0.14);
+  --brand-100: rgba(249, 115, 22, 0.22);
+  --brand-500: #F97316;
+  --brand-600: #F97316;
+  --brand-700: #FB923C;
+  --orange-tint: rgba(249, 115, 22, 0.14);
+
+  /* SLA Semantic Tokens — Dark Mode */
+  --sla-normal-text: #4ADE80;
+  --sla-normal-bg: rgba(74, 222, 128, 0.14);
+  --sla-at-risk-text: #FACC15;
+  --sla-at-risk-bg: rgba(250, 204, 21, 0.14);
+  --sla-breached-text: #F87171;
+  --sla-breached-bg: rgba(248, 113, 113, 0.14);
+  --sla-escalated-text: #A78BFA;
+  --sla-escalated-bg: rgba(167, 139, 250, 0.14);
+  --sla-stopped-text: #94A3B8;
+  --sla-stopped-bg: #1E293B;
+
+  /* Region Tokens — Dark Mode */
+  --region-mea-text: #FBBF24;
+  --region-mea-bg: rgba(245, 158, 11, 0.14);
+  --region-apac-text: #2DD4BF;
+  --region-apac-bg: rgba(45, 212, 191, 0.14);
+  --region-eu-text: #60A5FA;
+  --region-eu-bg: rgba(96, 165, 250, 0.14);
+  --region-amer-text: #C084FC;
+  --region-amer-bg: rgba(192, 132, 252, 0.14);
+
+  /* Priority Tokens — Dark Mode Slate Tones (NO red/orange) */
+  --priority-urgent-text: #E2E8F0;
+  --priority-urgent-bg: #334155;
+  --priority-high-text: #CBD5E1;
+  --priority-high-bg: #1E293B;
+  --priority-medium-text: #94A3B8;
+  --priority-medium-bg: #1E293B;
+  --priority-low-text: #64748B;
+  --priority-low-bg: #0F172A;
+
+  /* Status Tokens — Dark Mode */
+  --status-new-text: #60A5FA;
+  --status-new-bg: rgba(96, 165, 250, 0.14);
+  --status-open-text: #FB923C;
+  --status-open-bg: rgba(249, 115, 22, 0.14);
+  --status-pending-text: #FACC15;
+  --status-pending-bg: rgba(250, 204, 21, 0.14);
+  --status-escalated-text: #A78BFA;
+  --status-escalated-bg: rgba(167, 139, 250, 0.14);
+  --status-resolved-text: #4ADE80;
+  --status-resolved-bg: rgba(74, 222, 128, 0.14);
+  --status-closed-text: #94A3B8;
+  --status-closed-bg: #1E293B;
+
+  /* Focus Ring — Dark Mode */
+  --focus-ring: #FB923C;
 }
 
 @layer base {
   * {
     border-color: var(--border);
+  }
+
+  html {
+    transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease;
   }
 
   body {
@@ -115,14 +213,14 @@
     letter-spacing: -0.015em;
   }
 
-  /* Strict focus visible ring: 2px brand-500 with 2px offset */
+  /* Strict focus visible ring: 2px orange ring with 2px offset */
   a:focus-visible,
   button:focus-visible,
   input:focus-visible,
   select:focus-visible,
   textarea:focus-visible,
   [tabindex="0"]:focus-visible {
-    outline: 2px solid var(--brand-500) !important;
+    outline: 2px solid var(--focus-ring) !important;
     outline-offset: 2px !important;
   }
 }
@@ -146,15 +244,15 @@
   transition-duration: var(--duration-panel);
 }
 
-/* Pulse animation for breached SLA ring - subtle, pauses on hover */
+/* Pulse animation for breached SLA ring / badge - subtle, pauses on hover */
 @keyframes sla-breach-pulse {
   0%, 100% {
     opacity: 1;
     transform: scale(1);
   }
   50% {
-    opacity: 0.65;
-    transform: scale(1.06);
+    opacity: 0.75;
+    transform: scale(1.03);
   }
 }
 
@@ -166,71 +264,54 @@
   animation-play-state: paused;
 }
 
-/* Shine sweep animation for primary buttons */
-@keyframes shine-sweep {
-  0% {
-    left: -100%;
-    opacity: 0;
-  }
-  20% {
-    opacity: 0.35;
-  }
-  80% {
-    opacity: 0.35;
-  }
-  100% {
-    left: 150%;
-    opacity: 0;
-  }
-}
-
-.btn-shine-sweep {
-  position: relative;
-  overflow: hidden;
-}
-
-.btn-shine-sweep::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 60%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.3) 50%,
-    transparent 100%
-  );
-  transform: skewX(-20deg);
-  pointer-events: none;
-}
-
-.btn-shine-sweep:hover::after {
-  animation: shine-sweep 0.7s ease-out;
-}
-
-/* Violet wipe hover for danger button */
-.btn-danger-wipe {
+/* Signature Primary Button:
+   Light mode: navy pill (#0F172A), white text, trailing arrow-up-right.
+   On hover: wipes to orange (#EA580C) with navy text (#0F172A), arrow nudges up-right 2px.
+   Dark mode: orange fill (#F97316) with navy text (#0F172A), hover lightens to #FB923C.
+*/
+.btn-signature-primary {
   position: relative;
   overflow: hidden;
   z-index: 1;
+  transition: color 200ms ease, background-color 200ms ease, box-shadow 200ms ease;
 }
 
-.btn-danger-wipe::before {
+/* Light mode wipe effect */
+:root:not([data-theme="dark"]) .btn-signature-primary {
+  background-color: #0F172A;
+  color: #FFFFFF;
+}
+
+:root:not([data-theme="dark"]) .btn-signature-primary::before {
   content: "";
   position: absolute;
   inset: 0;
-  background-color: #6D28D9;
+  background-color: #EA580C;
   transform: scaleX(0);
-  transform-origin: right;
-  transition: transform 140ms ease-out;
+  transform-origin: left;
+  transition: transform 200ms ease-out;
   z-index: -1;
 }
 
-.btn-danger-wipe:hover::before {
+:root:not([data-theme="dark"]) .btn-signature-primary:hover:not(:disabled)::before {
   transform: scaleX(1);
-  transform-origin: left;
+}
+
+:root:not([data-theme="dark"]) .btn-signature-primary:hover:not(:disabled) {
+  color: #0F172A !important;
+}
+
+/* Dark mode button */
+[data-theme="dark"] .btn-signature-primary,
+.dark .btn-signature-primary {
+  background-color: #F97316;
+  color: #0F172A;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .btn-signature-primary:hover:not(:disabled),
+.dark .btn-signature-primary:hover:not(:disabled) {
+  background-color: #FB923C;
 }
 
 /* Split-flap digit flip transition */
@@ -256,20 +337,25 @@
   perspective: 300px;
 }
 
-/* Accessibility: respects reduced motion preference */
+/* Accessibility: respects reduced motion preference (removes ALL animation) */
 @media (prefers-reduced-motion: reduce) {
   *,
   ::before,
   ::after {
-    animation-duration: 0.01ms !important;
+    animation: none !important;
+    animation-duration: 0ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    transition: none !important;
+    transition-duration: 0ms !important;
     scroll-behavior: auto !important;
   }
 
+  html {
+    transition: none !important;
+  }
+
   .animate-sla-breach,
-  .btn-shine-sweep::after,
-  .btn-danger-wipe::before {
+  .btn-signature-primary::before {
     animation: none !important;
     transition: none !important;
   }

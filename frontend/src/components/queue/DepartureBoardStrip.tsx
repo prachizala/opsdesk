@@ -20,6 +20,7 @@ export function DepartureBoardStrip({
 }: DepartureBoardStripProps) {
   const router = useRouter();
   const [now, setNow] = useState<number>(Date.now());
+  const [flipKeys, setFlipKeys] = useState<Record<string, number>>({});
 
   // 1-second live countdown ticker
   useEffect(() => {
@@ -28,6 +29,13 @@ export function DepartureBoardStrip({
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const handleRowMouseEnter = (ticketId: string) => {
+    setFlipKeys((prev) => ({
+      ...prev,
+      [ticketId]: (prev[ticketId] || 0) + 1,
+    }));
+  };
 
   // Compute 5 most urgent check-ins from loaded tickets
   const urgentTickets = useMemo(() => {
@@ -88,7 +96,7 @@ export function DepartureBoardStrip({
   return (
     <div
       className={cn(
-        "bg-[#07151D] border border-[#16384C] rounded-card p-4 text-[#A8C7DC] shadow-md font-mono-numbers flex flex-col gap-3 select-none",
+        "bg-[#07151D] border border-[#16384C] rounded-[24px] p-4 text-[#A8C7DC] shadow-md font-mono-numbers flex flex-col gap-3 select-none",
         className
       )}
       aria-label="Dispatch Departure Board"
@@ -116,6 +124,7 @@ export function DepartureBoardStrip({
       <div className="flex flex-col gap-1.5 divide-y divide-[#102B3C]/60">
         {urgentTickets.map((t) => {
           const countdownStr = formatCountdown(t.check_in_date);
+          const flipKey = flipKeys[t.id] || 0;
 
           // SLA Light styling
           const isBreached = t.sla.status === "BREACHED";
@@ -123,22 +132,23 @@ export function DepartureBoardStrip({
           const isNormal = t.sla.status === "NORMAL";
 
           let lightColor = "bg-slate-400";
-          let glowColor = "group-hover:shadow-[0_0_8px_rgba(148,163,184,0.8)]";
+          let glowColor = "group-hover:shadow-[0_0_10px_rgba(148,163,184,0.9)]";
           if (isBreached) {
             lightColor = "bg-rose-500 animate-pulse";
-            glowColor = "group-hover:shadow-[0_0_12px_rgba(244,63,94,1)]";
+            glowColor = "group-hover:shadow-[0_0_14px_rgba(244,63,94,1)]";
           } else if (isAtRisk) {
             lightColor = "bg-amber-400";
-            glowColor = "group-hover:shadow-[0_0_12px_rgba(251,191,36,1)]";
+            glowColor = "group-hover:shadow-[0_0_14px_rgba(251,191,36,1)]";
           } else if (isNormal) {
             lightColor = "bg-emerald-400";
-            glowColor = "group-hover:shadow-[0_0_12px_rgba(52,211,153,1)]";
+            glowColor = "group-hover:shadow-[0_0_14px_rgba(52,211,153,1)]";
           }
 
           return (
             <div
               key={t.id}
               onClick={() => handleClick(t.id)}
+              onMouseEnter={() => handleRowMouseEnter(t.id)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
@@ -148,7 +158,7 @@ export function DepartureBoardStrip({
               tabIndex={0}
               role="button"
               aria-label={`Open case ${t.id} - Check in in ${countdownStr}`}
-              className="pt-2 first:pt-0 flex items-center justify-between text-[12px] gap-2 flex-wrap sm:flex-nowrap group hover:bg-[#0C2433] p-1.5 rounded-xs transition-colors cursor-pointer focus:outline-none focus:bg-[#0C2433]"
+              className="pt-2 first:pt-0 flex items-center justify-between text-[12px] gap-2 flex-wrap sm:flex-nowrap group hover:bg-[#0C2433] p-1.5 rounded-lg transition-colors cursor-pointer focus:outline-none focus:bg-[#0C2433]"
             >
               {/* Left: SLA Light + ID + Agency + Title */}
               <div className="flex items-center gap-2.5 min-w-0">
@@ -158,7 +168,7 @@ export function DepartureBoardStrip({
                     "w-2.5 h-2.5 rounded-full shrink-0 transition-all duration-150 shadow-xs",
                     lightColor,
                     glowColor,
-                    "group-hover:scale-125"
+                    "group-hover:scale-125 group-hover:brightness-150"
                   )}
                   title={`SLA: ${t.sla.status}`}
                 />
@@ -190,7 +200,7 @@ export function DepartureBoardStrip({
                       if (ch === ":" || ch === " " || ch === "d") {
                         return (
                           <span
-                            key={idx}
+                            key={`${idx}-${flipKey}`}
                             className="text-departure-amber font-bold text-[12px] px-0.5"
                           >
                             {ch}
@@ -199,7 +209,7 @@ export function DepartureBoardStrip({
                       }
                       return (
                         <SplitFlap
-                          key={idx}
+                          key={`${idx}-${flipKey}`}
                           char={ch}
                           size="sm"
                           amber={true}

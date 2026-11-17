@@ -223,7 +223,7 @@ export function TicketConversation({
                       className={cn(
                         "group relative rounded-card p-4 transition-all duration-200",
                         isInternal
-                          ? "bg-yellow-50 border border-amber-300 border-dashed"
+                          ? "bg-yellow-50/80 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700/60 border-dashed"
                           : "bg-surface border border-border shadow-xs"
                       )}
                     >
@@ -238,13 +238,13 @@ export function TicketConversation({
                             {roleInfo.label}
                           </Chip>
                           {isInternal ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-900 bg-amber-100/90 px-2 py-0.5 rounded border border-amber-200">
-                              <Lock className="w-3 h-3 text-amber-700" />
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-900 dark:text-amber-200 bg-amber-100/90 dark:bg-amber-900/40 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-700">
+                              <Lock className="w-3 h-3 text-amber-700 dark:text-amber-400" />
                               Internal Note
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-700 bg-brand-50 px-2 py-0.5 rounded border border-brand-200">
-                              <Globe className="w-3 h-3 text-brand-600" />
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-950/40 px-2 py-0.5 rounded border border-brand-200 dark:border-brand-800">
+                              <Globe className="w-3 h-3 text-brand-600 dark:text-brand-400" />
                               Public Reply
                             </span>
                           )}
@@ -254,15 +254,15 @@ export function TicketConversation({
                         <div className="flex items-center gap-2">
                           {/* Hover Action Buttons */}
                           <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                            <Tooltip content={isCopied ? "Copied!" : "Copy message"}>
+                            <Tooltip content={isCopied ? "Copied" : "Copy message"}>
                               <button
                                 type="button"
                                 onClick={() => handleCopyMessage(msg)}
                                 aria-label="Copy message text"
-                                className="p-1 rounded hover:bg-slate-200/60 text-content-secondary hover:text-content-primary transition-colors cursor-pointer"
+                                className="p-1 rounded hover:bg-slate-200/60 dark:hover:bg-slate-700/50 text-content-secondary hover:text-content-primary transition-colors cursor-pointer"
                               >
                                 {isCopied ? (
-                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                  <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                                 ) : (
                                   <Copy className="w-3.5 h-3.5" />
                                 )}
@@ -273,7 +273,7 @@ export function TicketConversation({
                                 type="button"
                                 onClick={() => handleQuoteMessage(msg)}
                                 aria-label="Quote message"
-                                className="p-1 rounded hover:bg-slate-200/60 text-content-secondary hover:text-content-primary transition-colors cursor-pointer"
+                                className="p-1 rounded hover:bg-slate-200/60 dark:hover:bg-slate-700/50 text-content-secondary hover:text-content-primary transition-colors cursor-pointer"
                               >
                                 <Quote className="w-3.5 h-3.5" />
                               </button>
@@ -293,7 +293,7 @@ export function TicketConversation({
                       <div
                         className={cn(
                           "text-body whitespace-pre-wrap leading-relaxed pl-8",
-                          isInternal ? "text-amber-950 font-normal" : "text-content-primary"
+                          isInternal ? "text-amber-950 dark:text-amber-200 font-normal" : "text-content-primary"
                         )}
                       >
                         {msg.content}
@@ -319,20 +319,20 @@ export function TicketConversation({
               className={cn(
                 "rounded-card p-4 border transition-all duration-200 space-y-3",
                 activeTab === "internal"
-                  ? "bg-yellow-50 border-amber-300"
-                  : "bg-white border-border"
+                  ? "bg-yellow-50/80 dark:bg-amber-950/20 border-amber-300 dark:border-amber-700"
+                  : "bg-surface border-border"
               )}
             >
               <div className="flex items-center justify-between text-caption">
                 <div className="flex items-center gap-1.5 font-semibold">
                   {activeTab === "internal" ? (
                     <>
-                      <Lock className="w-3.5 h-3.5 text-amber-700" />
-                      <span className="text-amber-900">Only visible to staff</span>
+                      <Lock className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
+                      <span className="text-amber-900 dark:text-amber-200">Only visible to staff</span>
                     </>
                   ) : (
                     <>
-                      <Globe className="w-3.5 h-3.5 text-brand-600" />
+                      <Globe className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />
                       <span className="text-content-secondary">Visible to the agency</span>
                     </>
                   )}
@@ -357,7 +357,7 @@ export function TicketConversation({
                 className={cn(
                   "w-full px-3.5 py-2.5 rounded-input border text-table text-content-primary placeholder:text-content-tertiary resize-none focus:outline-none focus:ring-2 transition-subtle leading-relaxed",
                   activeTab === "internal"
-                    ? "bg-white/90 border-amber-300 focus:ring-amber-500"
+                    ? "bg-surface/90 border-amber-300 dark:border-amber-700 focus:ring-amber-500"
                     : "bg-surface border-border focus:ring-brand-500"
                 )}
               />

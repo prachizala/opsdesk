@@ -1,6 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  darkMode: ["class", '[data-theme="dark"]'],
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -16,6 +17,10 @@ const config: Config = {
           },
           text: "var(--chrome-text)",
           muted: "var(--chrome-muted)",
+        },
+        navy: {
+          900: "var(--chrome-navy-900)",
+          800: "var(--chrome-navy-800)",
         },
         departure: {
           amber: "var(--departure-amber)",
@@ -34,14 +39,22 @@ const config: Config = {
           secondary: "var(--text-secondary)",
           tertiary: "var(--text-tertiary)",
           disabled: "var(--text-disabled)",
+          muted: "var(--text-muted)",
         },
         brand: {
+          DEFAULT: "var(--brand-orange)",
+          orange: "var(--brand-orange)",
+          "orange-text": "var(--brand-orange-text)",
+          "orange-fill": "var(--brand-orange-fill)",
+          "orange-navy": "var(--brand-orange-navy)",
+          tint: "var(--orange-tint)",
           50: "var(--brand-50)",
           100: "var(--brand-100)",
           500: "var(--brand-500)",
           600: "var(--brand-600)",
           700: "var(--brand-700)",
         },
+        "focus-ring": "var(--focus-ring)",
         region: {
           mea: {
             text: "var(--region-mea-text)",
@@ -153,10 +166,15 @@ const config: Config = {
         chip: "var(--radius-chip)",
         card: "var(--radius-card)",
         modal: "var(--radius-modal)",
+        panel: "var(--radius-panel)",
+        island: "var(--radius-panel)",
+        24: "24px",
+        12: "12px",
+        8: "8px",
       },
       boxShadow: {
         xs: "0 1px 2px rgba(15, 23, 42, 0.04)",
-        sm: "0 1px 2px rgba(15, 23, 42, 0.06)",
+        sm: "0 1px 3px rgba(15, 23, 42, 0.08)",
         md: "0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.06)",
         lg: "0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.04)",
         glow: "0 0 16px -2px var(--brand-500)",

@@ -107,7 +107,7 @@ export default function InsightsPage() {
         />
       )}
 
-      {/* 2. Fleet SLA HealthBar & 4 KPI cards with SpotlightGlow and CountUp */}
+      {/* 2. Fleet SLA HealthBar & 4 KPI cards with CountUp */}
       <InsightsKpiStrip
         data={data}
         slaCounts={slaCounts}

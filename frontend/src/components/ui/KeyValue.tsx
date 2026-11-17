@@ -37,7 +37,7 @@ export function KeyValue({
           <button
             type="button"
             onClick={handleCopy}
-            title={copied ? "Copied to clipboard!" : "Copy to clipboard"}
+            title={copied ? "Copied to clipboard" : "Copy to clipboard"}
             aria-label={`Copy ${label}`}
             className="flex items-center gap-1 text-content-tertiary hover:text-content-primary p-0.5 rounded-input transition-subtle cursor-pointer"
           >

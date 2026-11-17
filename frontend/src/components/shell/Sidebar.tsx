@@ -29,12 +29,20 @@ interface RegionLoad {
 }
 
 const REGION_LOADS: RegionLoad[] = [
-  { code: "MEA", name: "Middle East & Africa", loadPct: 78, textColor: "#D97706", barColor: "#D97706", bgColor: "#FEF3C7" },
+  { code: "MEA", name: "Middle East & Africa", loadPct: 78, textColor: "#F59E0B", barColor: "#F59E0B", bgColor: "#FEF3C7" },
   { code: "APAC", name: "Asia-Pacific", loadPct: 64, textColor: "#0D9488", barColor: "#0D9488", bgColor: "#CCFBF1" },
-  { code: "EU", name: "Europe", loadPct: 91, textColor: "#2563EB", barColor: "#2563EB", bgColor: "#DBEAFE" },
-  { code: "AMER", name: "Americas", loadPct: 45, textColor: "#7C3AED", barColor: "#7C3AED", bgColor: "#EDE9FE" },
+  { code: "EU", name: "Europe", loadPct: 91, textColor: "#3B82F6", barColor: "#3B82F6", bgColor: "#DBEAFE" },
+  { code: "AMER", name: "Americas", loadPct: 45, textColor: "#A855F7", barColor: "#A855F7", bgColor: "#EDE9FE" },
 ];
 
+/**
+ * Sidebar: Navy sidebar island.
+ * - Stays dark navy (#0F172A) in BOTH light and dark modes
+ * - 24px rounded corners (rounded-[24px])
+ * - 12px margin
+ * - 232px width; collapsible to 64px rail
+ * - Expands on hover when collapsed, with tooltips
+ */
 export function Sidebar({ className, onToggleCollapse }: SidebarProps) {
   const [collapsed, setCollapsed] = useState<boolean>(false);
   const [isHoverExpanded, setIsHoverExpanded] = useState<boolean>(false);
@@ -72,7 +80,7 @@ export function Sidebar({ className, onToggleCollapse }: SidebarProps) {
   return (
     <div
       className={cn(
-        "relative shrink-0 select-none",
+        "relative shrink-0 select-none my-3 transition-all duration-200",
         collapsed ? "w-16" : "w-[232px]",
         className
       )}
@@ -85,11 +93,11 @@ export function Sidebar({ className, onToggleCollapse }: SidebarProps) {
     >
       <aside
         className={cn(
-          "bg-chrome-navy-900 border-r border-[#16384C] text-chrome-text flex flex-col justify-between py-4 min-h-[calc(100vh-56px)] transition-panel",
+          "bg-[#0F172A] border border-[#1E293B] text-slate-100 rounded-[24px] shadow-md flex flex-col justify-between py-4 transition-all duration-200",
           collapsed && !isHoverExpanded
-            ? "w-16"
-            : "w-[232px]",
-          collapsed && isHoverExpanded && "absolute top-0 left-0 z-30 shadow-2xl border-r border-[#1E455A]"
+            ? "w-16 h-[calc(100vh-6rem)]"
+            : "w-[232px] h-[calc(100vh-6rem)]",
+          collapsed && isHoverExpanded && "absolute top-0 left-0 z-30 shadow-2xl border border-[#334155]"
         )}
         aria-label="Sidebar Navigation"
       >
@@ -97,7 +105,7 @@ export function Sidebar({ className, onToggleCollapse }: SidebarProps) {
           {/* Navigation Category Label */}
           {effectivelyExpanded ? (
             <div className="px-4">
-              <span className="text-micro-label font-medium uppercase tracking-wider text-chrome-muted">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                 {isRequester ? "Agency Workspace" : "Control Tower"}
               </span>
             </div>
@@ -106,7 +114,7 @@ export function Sidebar({ className, onToggleCollapse }: SidebarProps) {
           )}
 
           {/* Navigation Links */}
-          <nav className="flex flex-col gap-1 px-2" role="navigation">
+          <nav className="flex flex-col gap-1.5 px-2.5" role="navigation">
             {navItems
               .filter((item) => item.visible)
               .map((item) => {
@@ -121,16 +129,16 @@ export function Sidebar({ className, onToggleCollapse }: SidebarProps) {
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      "group flex items-center gap-3 rounded-input text-table font-medium transition-subtle py-2 px-3",
+                      "group flex items-center gap-3 rounded-full text-table font-medium transition-subtle py-2.5 px-3.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
                       isActive
-                        ? "bg-chrome-navy-800 text-white font-semibold border-l-[3px] border-brand-500 pl-[9px]"
-                        : "text-chrome-muted hover:text-chrome-text hover:bg-[#12303F]/70"
+                        ? "bg-[#1E293B] text-white font-semibold border-l-[3px] border-brand-orange pl-[11px]"
+                        : "text-slate-400 hover:text-slate-100 hover:bg-[#1E293B]/70"
                     )}
                   >
                     <Icon
                       className={cn(
-                        "w-4 h-4 shrink-0 transition-transform duration-120 group-hover:translate-x-0.5 group-focus-visible:translate-x-0.5",
-                        isActive ? "text-brand-500" : "text-chrome-muted group-hover:text-chrome-text"
+                        "w-4 h-4 shrink-0 transition-transform duration-120 group-hover:translate-x-0.5",
+                        isActive ? "text-brand-orange" : "text-slate-400 group-hover:text-slate-100"
                       )}
                     />
                     {effectivelyExpanded && <span className="truncate">{item.label}</span>}
@@ -151,13 +159,13 @@ export function Sidebar({ className, onToggleCollapse }: SidebarProps) {
         </div>
 
         {/* Sidebar Footer Controls */}
-        <div className="px-2 pt-4 border-t border-[#16384C] flex flex-col gap-3">
+        <div className="px-2.5 pt-4 border-t border-[#1E293B] flex flex-col gap-3">
           {/* Region Load Bars */}
           {effectivelyExpanded ? (
-            <div className="px-2 py-1 flex flex-col gap-2 bg-chrome-navy-800/60 rounded-input border border-[#1A3D52]/60">
-              <div className="flex items-center justify-between text-[11px] text-chrome-muted font-mono-numbers">
+            <div className="px-3 py-2 flex flex-col gap-2 bg-[#1E293B]/70 rounded-2xl border border-[#334155]/40">
+              <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono-numbers">
                 <span className="flex items-center gap-1 uppercase tracking-wider font-semibold">
-                  <Activity className="w-3 h-3 text-brand-500" />
+                  <Activity className="w-3.5 h-3.5 text-brand-orange" />
                   Region Load
                 </span>
                 <span className="text-[10px]">AVG 70%</span>
@@ -166,10 +174,10 @@ export function Sidebar({ className, onToggleCollapse }: SidebarProps) {
                 {REGION_LOADS.map((reg) => (
                   <div key={reg.code} className="flex flex-col gap-0.5">
                     <div className="flex justify-between items-center text-[10px] font-mono-numbers leading-tight">
-                      <span className="font-semibold text-chrome-text">{reg.code}</span>
-                      <span className="text-chrome-muted">{reg.loadPct}%</span>
+                      <span className="font-semibold text-slate-200">{reg.code}</span>
+                      <span className="text-slate-400">{reg.loadPct}%</span>
                     </div>
-                    <div className="w-full h-1 rounded-full bg-[#0E2736] overflow-hidden">
+                    <div className="w-full h-1 rounded-full bg-[#0B1120] overflow-hidden">
                       <div
                         className="h-full rounded-full transition-all duration-300"
                         style={{
@@ -186,7 +194,7 @@ export function Sidebar({ className, onToggleCollapse }: SidebarProps) {
             <Tooltip
               content={
                 <div className="p-1 space-y-1 font-mono-numbers text-[10px]">
-                  <p className="font-semibold text-white mb-1">Region Operational Load:</p>
+                  <p className="font-semibold text-white mb-1">Region Load:</p>
                   {REGION_LOADS.map((r) => (
                     <div key={r.code} className="flex justify-between gap-3">
                       <span>{r.code}:</span>
@@ -202,13 +210,13 @@ export function Sidebar({ className, onToggleCollapse }: SidebarProps) {
                   {REGION_LOADS.map((r) => (
                     <div
                       key={r.code}
-                      className="w-1.5 h-3 rounded-xs"
+                      className="w-1.5 h-3 rounded-full"
                       style={{ backgroundColor: r.barColor }}
                       title={`${r.code} ${r.loadPct}%`}
                     />
                   ))}
                 </div>
-                <span className="text-[9px] font-mono-numbers text-chrome-muted uppercase">LOAD</span>
+                <span className="text-[9px] font-mono-numbers text-slate-400 uppercase">LOAD</span>
               </div>
             </Tooltip>
           )}
@@ -219,7 +227,7 @@ export function Sidebar({ className, onToggleCollapse }: SidebarProps) {
             onClick={handleToggle}
             aria-label={collapsed ? "Expand sidebar navigation" : "Collapse sidebar navigation"}
             className={cn(
-              "flex items-center gap-3 w-full rounded-input text-caption font-medium text-chrome-muted hover:text-white hover:bg-chrome-navy-800 transition-subtle py-2 px-3 cursor-pointer",
+              "flex items-center gap-3 w-full rounded-full text-caption font-medium text-slate-400 hover:text-white hover:bg-[#1E293B] transition-subtle py-2 px-3.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring",
               !effectivelyExpanded && "justify-center px-0"
             )}
           >

@@ -49,7 +49,7 @@ export function QueuePreviewDrawer({
   onRefresh,
 }: QueuePreviewDrawerProps) {
   const router = useRouter();
-  const { currentUser } = useUser();
+  const { currentUser, isStaff } = useUser();
   const { showToast } = useToast();
 
   const [ticket, setTicket] = useState<TicketDetail | null>(null);
@@ -243,35 +243,37 @@ export function QueuePreviewDrawer({
             </div>
           </div>
 
-          {/* Quick Actions Row */}
-          <div className="flex items-center gap-2 p-2.5 rounded-card bg-surface-subtle border border-border">
-            {!ticket.assigned_to && (
+          {/* Quick Actions Row (Staff Only) */}
+          {isStaff && (
+            <div className="flex items-center gap-2 p-2.5 rounded-card bg-surface-subtle border border-border">
+              {!ticket.assigned_to && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<UserPlus className="w-3.5 h-3.5 text-brand-600" />}
+                  onClick={handleAssignToMe}
+                >
+                  Assign to me
+                </Button>
+              )}
               <Button
                 variant="secondary"
                 size="sm"
-                icon={<UserPlus className="w-3.5 h-3.5 text-brand-600" />}
-                onClick={handleAssignToMe}
+                icon={<ArrowUpCircle className="w-3.5 h-3.5 text-amber-600" />}
+                onClick={handleEscalate}
               >
-                Assign to me
+                Escalate
               </Button>
-            )}
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<ArrowUpCircle className="w-3.5 h-3.5 text-amber-600" />}
-              onClick={handleEscalate}
-            >
-              Escalate
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<Copy className="w-3.5 h-3.5" />}
-              onClick={handleCopyTboh}
-            >
-              Copy TBOH
-            </Button>
-          </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<Copy className="w-3.5 h-3.5" />}
+                onClick={handleCopyTboh}
+              >
+                Copy TBOH
+              </Button>
+            </div>
+          )}
 
           {/* Flight Path Timeline */}
           <div className="border border-border rounded-card p-3.5 bg-surface shadow-2xs">
@@ -348,7 +350,7 @@ export function QueuePreviewDrawer({
           </div>
 
           {/* Routing Explanation (Staff Only) */}
-          {ticket.routing_reason && (
+          {isStaff && ticket.routing_reason && (
             <div className="flex items-start gap-2 p-3 bg-amber-50/70 border border-amber-200/80 rounded-card text-caption text-amber-900">
               <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
               <div>

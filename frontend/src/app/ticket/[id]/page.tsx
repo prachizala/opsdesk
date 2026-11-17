@@ -237,9 +237,9 @@ export default function TicketDetailPage() {
     return (
       <div className="max-w-[1440px] mx-auto py-8 px-4 sm:px-6 w-full overflow-x-hidden">
         <div className="flex items-center gap-2 mb-6">
-          <div className="w-20 h-4 bg-slate-200 rounded animate-pulse" />
-          <div className="w-4 h-4 bg-slate-200 rounded animate-pulse" />
-          <div className="w-24 h-4 bg-slate-200 rounded animate-pulse" />
+          <div className="w-20 h-4 bg-surface-subtle border border-border rounded animate-pulse" />
+          <div className="w-4 h-4 bg-surface-subtle border border-border rounded animate-pulse" />
+          <div className="w-24 h-4 bg-surface-subtle border border-border rounded animate-pulse" />
         </div>
         <div className="h-28 bg-surface border border-border rounded-card animate-pulse mb-6" />
         <div className="grid grid-cols-1 xl:grid-cols-[280px_1fr_320px] gap-6">

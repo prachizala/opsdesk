@@ -180,7 +180,7 @@ export function QueueTable({
             <th className="px-3 w-[110px] hidden md:table-cell font-medium">Intent</th>
             <th className="px-3 w-[80px] font-medium">Priority</th>
             <th className="px-3 w-[76px] font-medium">Status</th>
-            <th className="px-3 w-[175px] font-medium">Dates</th>
+            <th className="px-3 w-[175px] max-w-[175px] font-medium">Dates</th>
             <th className="px-3 w-[110px] hidden min-[1200px]:table-cell font-medium">Assignee</th>
             {isStaff && (
               <th className="px-3 w-[54px] text-right hidden min-[1280px]:table-cell font-medium">
@@ -309,7 +309,9 @@ export function QueueTable({
                     className={cn(
                       "h-[56px] transition-all duration-120 cursor-pointer border-l-4 hover:border-l-[6px] group relative focus:outline-none",
                       slaBorderColor,
-                      isSelected ? "bg-brand-50/70" : "hover:bg-[#F0FDFA]/70",
+                      isSelected
+                        ? "bg-brand-50/80 dark:bg-brand-950/30"
+                        : "hover:bg-orange-500/[0.04] dark:hover:bg-orange-500/[0.07]",
                       isClosedOrResolved && "opacity-60 text-content-tertiary"
                     )}
                   >
@@ -386,13 +388,18 @@ export function QueueTable({
                               delayMs={200}
                               position="top"
                               content={
-                                <div className="text-left text-[11px]">
+                                <div className="text-left text-[11px] p-1 flex flex-col gap-1 max-w-xs">
                                   <span className="font-semibold text-departure-amber block">
                                     {linkedCount} Sibling {linkedCount === 1 ? "Case" : "Cases"}:
                                   </span>
-                                  <span className="font-mono-numbers text-white">
-                                    {linkedList.join(", ")}
-                                  </span>
+                                  <div className="flex flex-col gap-0.5 font-mono-numbers text-white">
+                                    {linkedList.map((siblingId) => (
+                                      <div key={siblingId} className="flex items-center gap-1.5">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                                        <span>{siblingId}</span>
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
                               }
                             >
@@ -468,8 +475,8 @@ export function QueueTable({
                     </td>
 
                     {/* 8. Dates: compact FlightPathTimeline strip + "Check-in in 2d 4h / LCD 3 Dec" */}
-                    <td className="px-3 overflow-hidden">
-                      <div className="flex flex-col justify-center text-[11px] font-mono-numbers leading-tight min-w-0 w-full overflow-hidden">
+                    <td className="px-3 w-[175px] max-w-[175px] overflow-hidden">
+                      <div className="flex flex-col justify-center text-[11px] font-mono-numbers leading-tight min-w-0 w-[175px] max-w-[175px] overflow-hidden">
                         <div className="truncate">
                           <span
                             className={cn(
@@ -511,7 +518,7 @@ export function QueueTable({
 
                     {/* 9. Assignee & Quick Actions (Hover Overlay) */}
                     <td className="px-3 hidden min-[1200px]:table-cell relative overflow-hidden">
-                      {/* Normal Assignee Display */}
+                      {/* Normal Assignee Display: avatar, or small yellow dot + "Unassigned" */}
                       <div className="flex items-center gap-1.5 min-w-0 group-hover:opacity-0 transition-opacity duration-100">
                         {t.assigned_to ? (
                           <>
@@ -521,51 +528,54 @@ export function QueueTable({
                             </span>
                           </>
                         ) : (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-input text-[11px] text-content-disabled border border-dashed border-border whitespace-nowrap">
-                            Unassigned
+                          <span className="inline-flex items-center gap-1.5 text-[11px] text-content-secondary whitespace-nowrap">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                            <span>Unassigned</span>
                           </span>
                         )}
                       </div>
 
-                      {/* Quick Actions Sliding In Over Assignee/Score Area on Hover: NO LAYOUT SHIFT */}
-                      <div className="absolute inset-y-0 right-3 flex items-center gap-1 opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-150 pointer-events-none group-hover:pointer-events-auto z-10 bg-gradient-to-l from-[#F0FDFA] via-[#F0FDFA] to-transparent pl-4">
-                        {!t.assigned_to && (
+                      {/* Quick Actions Sliding In Over Assignee/Score Area on Hover (Staff Only): NO LAYOUT SHIFT */}
+                      {isStaff && (
+                        <div className="absolute inset-y-0 right-3 flex items-center gap-1 opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-150 pointer-events-none group-hover:pointer-events-auto z-10 bg-gradient-to-l from-orange-50/95 via-orange-50/90 to-transparent dark:from-slate-900/95 dark:via-slate-900/90 dark:to-transparent pl-4">
+                          {!t.assigned_to && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleAssignToMe(t.id, e)}
+                              className="p-1 rounded bg-surface hover:bg-brand-50 text-brand-700 border border-border hover:border-brand-300 shadow-xs text-[11px] font-medium flex items-center gap-0.5 transition-colors cursor-pointer"
+                              title="Assign to me"
+                            >
+                              <UserPlus className="w-3.5 h-3.5 text-brand-600" />
+                              <span className="hidden min-[1360px]:inline">Assign</span>
+                            </button>
+                          )}
                           <button
                             type="button"
-                            onClick={(e) => handleAssignToMe(t.id, e)}
-                            className="p-1 rounded bg-surface hover:bg-brand-50 text-brand-700 border border-border hover:border-brand-300 shadow-xs text-[11px] font-medium flex items-center gap-0.5 transition-colors"
-                            title="Assign to me"
+                            onClick={(e) => handleEscalate(t.id, e)}
+                            className="p-1 rounded bg-surface hover:bg-amber-50 text-amber-700 border border-border hover:border-amber-300 shadow-xs text-[11px] font-medium flex items-center gap-0.5 transition-colors cursor-pointer"
+                            title="Escalate ticket"
                           >
-                            <UserPlus className="w-3.5 h-3.5 text-brand-600" />
-                            <span className="hidden min-[1360px]:inline">Assign</span>
+                            <ArrowUpCircle className="w-3.5 h-3.5 text-amber-600" />
+                            <span className="hidden min-[1360px]:inline">Escalate</span>
                           </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={(e) => handleEscalate(t.id, e)}
-                          className="p-1 rounded bg-surface hover:bg-amber-50 text-amber-700 border border-border hover:border-amber-300 shadow-xs text-[11px] font-medium flex items-center gap-0.5 transition-colors"
-                          title="Escalate ticket"
-                        >
-                          <ArrowUpCircle className="w-3.5 h-3.5 text-amber-600" />
-                          <span className="hidden min-[1360px]:inline">Escalate</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => handleCopyTboh(t.tboh_id, e)}
-                          className="p-1 rounded bg-surface hover:bg-surface-subtle text-content-secondary border border-border shadow-xs text-[11px] font-medium transition-colors"
-                          title="Copy TBOH identifier"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => handleOpenTicket(t.id, e)}
-                          className="p-1 rounded bg-brand-600 hover:bg-brand-700 text-white shadow-xs text-[11px] font-medium transition-colors"
-                          title="Open full page"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                          <button
+                            type="button"
+                            onClick={(e) => handleCopyTboh(t.tboh_id, e)}
+                            className="p-1 rounded bg-surface hover:bg-surface-subtle text-content-secondary border border-border shadow-xs text-[11px] font-medium transition-colors cursor-pointer"
+                            title="Copy TBOH identifier"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleOpenTicket(t.id, e)}
+                            className="p-1 rounded bg-brand-600 hover:bg-brand-700 text-white shadow-xs text-[11px] font-medium transition-colors cursor-pointer"
+                            title="Open full page"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
                     </td>
 
                     {/* 10. Score (Staff Only) */}

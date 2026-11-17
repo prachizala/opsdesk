@@ -31,8 +31,8 @@ export function EscalateModal({
       isOpen={isOpen}
       onClose={onClose}
       title={
-        <div className="flex items-center gap-2 text-purple-900">
-          <ShieldAlert className="w-5 h-5 text-purple-600" />
+        <div className="flex items-center gap-2 text-violet-900 dark:text-violet-100">
+          <ShieldAlert className="w-5 h-5 text-violet-600 dark:text-violet-400" />
           <span>Escalate Case to Escalation Manager</span>
         </div>
       }
@@ -40,9 +40,9 @@ export function EscalateModal({
       maxWidth="md"
     >
       <div className="space-y-4 pt-2">
-        <div className="p-3 bg-purple-50 border border-purple-200 rounded-input text-caption text-purple-900 leading-relaxed">
+        <div className="p-3 bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800/80 rounded-input text-caption text-violet-900 dark:text-violet-200 leading-relaxed">
           <p className="font-semibold mb-1">Escalation Protocol Notice:</p>
-          <ul className="list-disc list-inside space-y-0.5 text-[12px] text-purple-800">
+          <ul className="list-disc list-inside space-y-0.5 text-[12px] text-violet-800 dark:text-violet-300">
             <li>Moves ticket priority to <strong>Urgent</strong>.</li>
             <li>Reassigns directly to <strong>Vikram Joshi</strong> (Escalation Manager queue).</li>
             <li>Logs an escalation event in the case audit trail and outbox stream.</li>
@@ -66,7 +66,7 @@ export function EscalateModal({
             type="button"
             onClick={handleConfirm}
             disabled={!reason.trim() || loading}
-            className="px-4 py-2 text-table font-semibold text-white rounded-input bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 transition-subtle cursor-pointer"
+            className="px-4 py-2 text-table font-semibold text-white rounded-input bg-violet-600 hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-50 transition-subtle cursor-pointer shadow-xs"
           >
             {loading ? "Escalating..." : "Confirm Escalation"}
           </button>
@@ -127,7 +127,7 @@ export function TransferModal({
           }))}
         />
 
-        <div className="p-2.5 bg-blue-50/60 border border-blue-200 rounded-input text-caption text-blue-900 leading-snug">
+        <div className="p-2.5 bg-brand-50/60 dark:bg-brand-950/40 border border-brand-200 dark:border-brand-800 rounded-input text-caption text-brand-900 dark:text-brand-200 leading-snug">
           ℹ️ <strong>Supplier thread preservation:</strong> Active vendor and hotel conversation threads will remain active and intact under the new owner.
         </div>
 

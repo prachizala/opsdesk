@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { TicketDetail, DEMO_USERS } from "@/lib/types";
 import {
   Card,
@@ -12,7 +13,7 @@ import {
   Avatar,
   StatusChip,
 } from "@/components/ui";
-import { formatDate } from "@/lib/utils";
+import { formatDate, cn } from "@/lib/utils";
 import { GitCommit, ExternalLink } from "lucide-react";
 import { fetchTicketDetail } from "@/lib/api";
 
@@ -31,6 +32,7 @@ interface SiblingPreviewData {
 }
 
 export function TicketBookingContext({ ticket, currentUserId = "USR-101" }: TicketBookingContextProps) {
+  const router = useRouter();
   // Resolve region and assignee name
   const region =
     ticket.agency_id === "AGY-001"
@@ -186,6 +188,7 @@ export function TicketBookingContext({ ticket, currentUserId = "USR-101" }: Tick
           createdAt={ticket.created_at}
           checkIn={ticket.check_in_date}
           lcd={ticket.lcd_date}
+          controllingDeadline={ticket.lcd_date ? "LCD" : "CHECK_IN"}
           variant="full"
         />
       </Card>
@@ -195,7 +198,7 @@ export function TicketBookingContext({ ticket, currentUserId = "USR-101" }: Tick
         <Card padding="md">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-caption font-semibold text-content-primary uppercase tracking-wider flex items-center gap-1.5">
-              <GitCommit className="w-3.5 h-3.5 text-brand-600" />
+              <GitCommit className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />
               <span>Case Story</span>
             </h3>
             <span className="text-[11px] font-mono-numbers text-content-tertiary">
@@ -223,7 +226,8 @@ export function TicketBookingContext({ ticket, currentUserId = "USR-101" }: Tick
                 y1={28}
                 x2={Math.max(220, allNodes.length * 75) - 30}
                 y2={28}
-                stroke="#CBD5E1"
+                stroke="currentColor"
+                className="text-slate-300 dark:text-slate-700"
                 strokeWidth="2.5"
                 strokeDasharray="4 4"
               />
@@ -246,7 +250,24 @@ export function TicketBookingContext({ ticket, currentUserId = "USR-101" }: Tick
                 return (
                   <g
                     key={node.id}
-                    className="cursor-pointer transition-transform duration-200"
+                    role="button"
+                    tabIndex={isCurrent ? -1 : 0}
+                    aria-label={`Ticket ${node.id}${isCurrent ? " (Current)" : ""}`}
+                    className={cn(
+                      "transition-transform duration-200 outline-none",
+                      isCurrent ? "cursor-default" : "cursor-pointer hover:scale-110 focus-visible:scale-110"
+                    )}
+                    onClick={() => {
+                      if (!isCurrent) {
+                        router.push(`/ticket/${node.id}`);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (!isCurrent && (e.key === "Enter" || e.key === " ")) {
+                        e.preventDefault();
+                        router.push(`/ticket/${node.id}`);
+                      }
+                    }}
                     onMouseEnter={() => setHoveredNode(node.id)}
                     onMouseLeave={() => setHoveredNode(null)}
                   >
@@ -270,8 +291,10 @@ export function TicketBookingContext({ ticket, currentUserId = "USR-101" }: Tick
                       cx={x}
                       cy={28}
                       r={isCurrent ? 10 : 8}
-                      fill="#FFFFFF"
-                      stroke={isCurrent ? "#0E9AA7" : "#94A3B8"}
+                      className={cn(
+                        "fill-surface transition-colors",
+                        isCurrent ? "stroke-brand-600 dark:stroke-brand-400" : "stroke-slate-400 dark:stroke-slate-600"
+                      )}
                       strokeWidth={isCurrent ? "3" : "2"}
                     />
 
@@ -283,8 +306,10 @@ export function TicketBookingContext({ ticket, currentUserId = "USR-101" }: Tick
                       x={x}
                       y={48}
                       textAnchor="middle"
-                      className="font-mono-numbers text-[10px] font-semibold"
-                      fill={isCurrent ? "#0E9AA7" : "#64748B"}
+                      className={cn(
+                        "font-mono-numbers text-[10px] font-semibold",
+                        isCurrent ? "fill-brand-600 dark:fill-brand-400" : "fill-content-secondary dark:fill-content-tertiary"
+                      )}
                     >
                       {node.id}
                     </text>

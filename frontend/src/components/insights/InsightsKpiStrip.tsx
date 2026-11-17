@@ -5,7 +5,6 @@ import { Layers, Activity, Clock, AlertTriangle, ShieldCheck } from "lucide-reac
 import {
   HealthBar,
   SlaCounts,
-  SpotlightGlow,
   CountUp,
   Skeleton,
   Card,
@@ -82,12 +81,12 @@ export function InsightsKpiStrip({
 
   return (
     <div className="space-y-4">
-      {/* 1. Fleet SLA HealthBar computed strictly from real API data */}
+      {/* 1. Fleet SLA HealthBar computed strictly from real API data with legend counts and filter links */}
       {slaCounts && (
         <Card className="p-4 shadow-xs">
           <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
             <div className="flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-brand-600" />
+              <ShieldCheck className="w-4 h-4 text-brand-orange dark:text-brand-orange-text" />
               <span className="text-caption font-semibold text-content-primary">
                 Operational SLA health status
               </span>
@@ -104,111 +103,109 @@ export function InsightsKpiStrip({
         </Card>
       )}
 
-      {/* 2. 4 KPI Cards wrapped in SpotlightGlow with CountUp on load */}
+      {/* 2. 4 KPI Cards with CountUp on load (NO pointer-position effects) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI 1: Recurring themes */}
-        <SpotlightGlow className="rounded-card h-full">
-          <div className="bg-surface border border-border rounded-card p-4 shadow-xs flex flex-col justify-between h-full hover:border-border-strong transition-all duration-120">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="text-caption font-medium text-content-secondary truncate">
-                Recurring themes
-              </span>
-              <div className="w-7 h-7 rounded-input bg-surface-subtle flex items-center justify-center text-brand-600 shrink-0">
-                <Layers className="w-4 h-4" />
-              </div>
-            </div>
-
-            <div className="flex items-baseline justify-between gap-3 my-1">
-              <span className="text-kpi font-semibold text-content-primary font-mono-numbers tracking-tight leading-none">
-                <CountUp end={themesCount} durationMs={700} />
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/50 text-[12px]">
-              <span className="text-content-tertiary truncate text-[11px]">
-                {days === 7 ? "Detected this week" : `Detected in ${days}d window`}
-              </span>
+        <Card className="p-4 shadow-xs flex flex-col justify-between h-full hover:border-border-strong transition-subtle">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="text-caption font-medium text-content-secondary truncate">
+              Recurring themes
+            </span>
+            <div className="w-7 h-7 rounded-input bg-surface-subtle flex items-center justify-center text-brand-orange dark:text-brand-orange-text shrink-0">
+              <Layers className="w-4 h-4" />
             </div>
           </div>
-        </SpotlightGlow>
 
-        {/* KPI 2: Total affected cases */}
-        <SpotlightGlow className="rounded-card h-full">
-          <div className="bg-surface border border-border rounded-card p-4 shadow-xs flex flex-col justify-between h-full hover:border-border-strong transition-all duration-120">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="text-caption font-medium text-content-secondary truncate">
-                Affected tickets
-              </span>
-              <div className="w-7 h-7 rounded-input bg-surface-subtle flex items-center justify-center text-brand-600 shrink-0">
-                <Activity className="w-4 h-4" />
-              </div>
-            </div>
+          <div className="flex items-baseline justify-between gap-3 my-1">
+            <span className="text-kpi font-semibold text-content-primary font-mono-numbers tracking-tight leading-none">
+              <CountUp end={themesCount} durationMs={700} />
+            </span>
+          </div>
 
-            <div className="flex items-baseline justify-between gap-3 my-1">
-              <span className="text-kpi font-semibold text-content-primary font-mono-numbers tracking-tight leading-none">
-                <CountUp end={totalAffectedTickets} durationMs={800} />
-              </span>
-            </div>
+          <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/50 text-[12px]">
+            <span className="text-content-tertiary truncate text-[11px]">
+              {days === 7 ? "Detected this week" : `Detected in ${days}d window`}
+            </span>
+          </div>
+        </Card>
 
-            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/50 text-[12px]">
-              <span className="text-content-tertiary truncate text-[11px]">
-                {totalAffectedTickets > 0 ? "Clustered from triage records" : "No affected tickets"}
-              </span>
+        {/* KPI 2: Affected tickets */}
+        <Card className="p-4 shadow-xs flex flex-col justify-between h-full hover:border-border-strong transition-subtle">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="text-caption font-medium text-content-secondary truncate">
+              Affected tickets
+            </span>
+            <div className="w-7 h-7 rounded-input bg-surface-subtle flex items-center justify-center text-brand-orange dark:text-brand-orange-text shrink-0">
+              <Activity className="w-4 h-4" />
             </div>
           </div>
-        </SpotlightGlow>
 
-        {/* KPI 3: Estimated hours impact */}
-        <SpotlightGlow className="rounded-card h-full">
-          <div className="bg-surface border border-border rounded-card p-4 shadow-xs flex flex-col justify-between h-full hover:border-border-strong transition-all duration-120">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="text-caption font-medium text-content-secondary truncate">
-                Estimated impact
-              </span>
-              <div className="w-7 h-7 rounded-input bg-surface-subtle flex items-center justify-center text-amber-600 shrink-0">
-                <Clock className="w-4 h-4" />
-              </div>
-            </div>
+          <div className="flex items-baseline justify-between gap-3 my-1">
+            <span className="text-kpi font-semibold text-content-primary font-mono-numbers tracking-tight leading-none">
+              <CountUp end={totalAffectedTickets} durationMs={800} />
+            </span>
+          </div>
 
-            <div className="flex items-baseline justify-between gap-3 my-1">
-              <span className="text-kpi font-semibold text-content-primary font-mono-numbers tracking-tight leading-none">
-                <CountUp end={Math.round(totalHoursWasted)} suffix=" hrs" durationMs={900} />
-              </span>
-            </div>
+          <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/50 text-[12px]">
+            <span className="text-content-tertiary truncate text-[11px]">
+              {totalAffectedTickets > 0 ? "Clustered from triage records" : "No affected tickets"}
+            </span>
+          </div>
+        </Card>
 
-            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/50 text-[12px]">
-              <span className="text-content-tertiary truncate text-[11px]">
-                Operational overhead across cases
-              </span>
+        {/* KPI 3: Estimated impact */}
+        <Card className="p-4 shadow-xs flex flex-col justify-between h-full hover:border-border-strong transition-subtle">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="text-caption font-medium text-content-secondary truncate">
+              Estimated impact
+            </span>
+            <div className="w-7 h-7 rounded-input bg-surface-subtle flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+              <Clock className="w-4 h-4" />
             </div>
           </div>
-        </SpotlightGlow>
 
-        {/* KPI 4: Top friction cluster */}
-        <SpotlightGlow className="rounded-card h-full">
-          <div className="bg-surface border border-border rounded-card p-4 shadow-xs flex flex-col justify-between h-full hover:border-border-strong transition-all duration-120">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="text-caption font-medium text-content-secondary truncate">
-                Top friction area
-              </span>
-              <div className="w-7 h-7 rounded-input bg-surface-subtle flex items-center justify-center text-amber-600 shrink-0">
-                <AlertTriangle className="w-4 h-4" />
-              </div>
+          <div className="flex items-baseline justify-between gap-3 my-1">
+            <span className="text-kpi font-semibold text-content-primary font-mono-numbers tracking-tight leading-none">
+              <CountUp end={Math.round(totalHoursWasted)} suffix=" hrs" durationMs={900} />
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/50 text-[12px]">
+            <span className="text-content-tertiary truncate text-[11px]">
+              Operational overhead across cases
+            </span>
+          </div>
+        </Card>
+
+        {/* KPI 4: Top friction area */}
+        <Card className="p-4 shadow-xs flex flex-col justify-between h-full hover:border-border-strong transition-subtle">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="text-caption font-medium text-content-secondary truncate">
+              Top friction area
+            </span>
+            <div className="w-7 h-7 rounded-input bg-surface-subtle flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+              <AlertTriangle className="w-4 h-4" />
             </div>
+          </div>
 
-            <div className="flex items-baseline justify-between gap-3 my-1">
-              <span className="text-kpi font-semibold text-content-primary tracking-tight leading-none truncate text-[22px]">
-                {topTheme ? topTheme.theme : "None"}
-              </span>
-            </div>
+          <div className="flex items-baseline justify-between gap-3 my-1">
+            <span className="text-kpi font-semibold text-content-primary tracking-tight leading-none truncate text-[22px]">
+              {topTheme ? topTheme.theme : "None"}
+            </span>
+          </div>
 
-            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/50 text-[12px]">
+          <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/50 text-[12px]">
+            {topTheme ? (
               <span className="text-content-tertiary truncate text-[11px] font-mono-numbers">
-                {topTheme ? `${topTheme.percentage}% volume share • ${topTheme.count} cases` : "No active friction clusters"}
+                <CountUp end={topTheme.percentage} suffix="%" durationMs={1000} /> volume share • {topTheme.count} cases
               </span>
-            </div>
+            ) : (
+              <span className="text-content-tertiary truncate text-[11px]">
+                No active friction clusters
+              </span>
+            )}
           </div>
-        </SpotlightGlow>
+        </Card>
       </div>
     </div>
   );

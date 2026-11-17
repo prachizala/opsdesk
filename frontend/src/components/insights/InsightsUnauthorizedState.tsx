@@ -14,7 +14,7 @@ export function InsightsUnauthorizedState({
 }: InsightsUnauthorizedStateProps) {
   return (
     <div className="max-w-xl mx-auto py-16 px-4 text-center">
-      <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-700 flex items-center justify-center mx-auto mb-4 border border-amber-200 shadow-xs">
+      <div className="w-12 h-12 rounded-full bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 flex items-center justify-center mx-auto mb-4 border border-amber-200 dark:border-amber-900/60 shadow-xs">
         <ShieldAlert className="w-6 h-6" />
       </div>
 
@@ -36,7 +36,7 @@ export function InsightsUnauthorizedState({
           variant="primary"
           size="md"
           icon={<ArrowLeft className="w-4 h-4" />}
-          className="min-h-[44px] focus-visible:ring-2 focus-visible:ring-brand-500"
+          className="min-h-[44px] focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
         >
           Return to operations queue
         </Button>

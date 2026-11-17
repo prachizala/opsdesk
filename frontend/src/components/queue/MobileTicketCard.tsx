@@ -42,7 +42,7 @@ export function MobileTicketCard({
   onSelectTicket,
 }: MobileTicketCardProps) {
   const router = useRouter();
-  const { currentUser } = useUser();
+  const { currentUser, isStaff } = useUser();
   const { showToast } = useToast();
 
   const now = Date.now();
@@ -179,7 +179,7 @@ export function MobileTicketCard({
               }
             >
               <div className="flex flex-col gap-1 w-40 text-caption font-sans">
-                {!ticket.assigned_to && (
+                {isStaff && !ticket.assigned_to && (
                   <button
                     type="button"
                     onClick={handleAssignToMe}
@@ -189,14 +189,16 @@ export function MobileTicketCard({
                     <span>Assign to me</span>
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={handleEscalate}
-                  className="flex items-center gap-2 px-2.5 py-1.5 rounded hover:bg-surface-subtle text-left text-amber-700 transition-colors cursor-pointer"
-                >
-                  <ArrowUpCircle className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Escalate</span>
-                </button>
+                {isStaff && (
+                  <button
+                    type="button"
+                    onClick={handleEscalate}
+                    className="flex items-center gap-2 px-2.5 py-1.5 rounded hover:bg-surface-subtle text-left text-amber-700 transition-colors cursor-pointer"
+                  >
+                    <ArrowUpCircle className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Escalate</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={handleCopyTboh}

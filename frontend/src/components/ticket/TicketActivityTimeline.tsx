@@ -184,7 +184,7 @@ export function TicketActivityTimeline({ ticket }: TicketActivityTimelineProps) 
             </div>
 
             {/* Vertical Line with 10px Coloured Dots */}
-            <div className="relative pl-7 space-y-5 border-l-2 border-slate-200 ml-3">
+            <div className="relative pl-7 space-y-5 border-l-2 border-border ml-3">
               {dayEvents.map((ev) => (
                 <div key={ev.id} className="relative group">
                   {/* 10px Coloured Dot (grows on hover) */}

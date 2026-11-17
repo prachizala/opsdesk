@@ -14,6 +14,10 @@ export interface SlaRingProps {
   className?: string;
 }
 
+/**
+ * SlaRing: 16-20px circular ring that fills as the SLA deadline nears.
+ * On hover, shows elapsed percentage and ticking seconds remaining.
+ */
 export function SlaRing({
   status = "NORMAL",
   progress,
@@ -23,7 +27,6 @@ export function SlaRing({
   showTooltip = true,
   className,
 }: SlaRingProps) {
-  // Normalize status
   const normalizedStatus = status.toUpperCase();
 
   // Ticking seconds state for live hover detail
@@ -55,7 +58,6 @@ export function SlaRing({
     if (hoursRemaining <= 0 || normalizedStatus === "BREACHED") {
       ratio = 1;
     } else {
-      // Closer to 0 remaining hours means higher progress (approaching deadline)
       ratio = Math.max(0, Math.min(1, 1 - hoursRemaining / totalHours));
     }
   } else if (normalizedStatus === "BREACHED") {
@@ -72,17 +74,17 @@ export function SlaRing({
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - ratio * circumference;
 
-  // Colors
-  const colors: Record<string, { track: string; stroke: string }> = {
-    NORMAL: { track: "#DCFCE7", stroke: "#15803D" },
-    AT_RISK: { track: "#FEF3C7", stroke: "#B45309" },
-    BREACHED: { track: "#FEE2E2", stroke: "#B91C1C" },
-    ESCALATED: { track: "#EDE9FE", stroke: "#6D28D9" },
-    STOPPED: { track: "#E2E8F0", stroke: "#64748B" },
-    CLOSED: { track: "#E2E8F0", stroke: "#64748B" },
+  // Semantic color mapping
+  const colorClasses: Record<string, { track: string; stroke: string }> = {
+    NORMAL: { track: "text-sla-normal-bg", stroke: "text-sla-normal-text" },
+    AT_RISK: { track: "text-sla-at_risk-bg", stroke: "text-sla-at_risk-text" },
+    BREACHED: { track: "text-sla-breached-bg", stroke: "text-sla-breached-text" },
+    ESCALATED: { track: "text-sla-escalated-bg", stroke: "text-sla-escalated-text" },
+    STOPPED: { track: "text-sla-stopped-bg", stroke: "text-sla-stopped-text" },
+    CLOSED: { track: "text-sla-stopped-bg", stroke: "text-sla-stopped-text" },
   };
 
-  const scheme = colors[normalizedStatus] || colors.NORMAL;
+  const scheme = colorClasses[normalizedStatus] || colorClasses.NORMAL;
   const isBreached = normalizedStatus === "BREACHED";
   const pctDisplay = Math.round(ratio * 100);
 
@@ -90,7 +92,7 @@ export function SlaRing({
     <div
       className={cn(
         "inline-flex items-center justify-center shrink-0 cursor-pointer",
-        isBreached && "animate-sla-breach",
+        isBreached && "animate-sla-breach hover:[animation-play-state:paused]",
         className
       )}
       style={{ width: size, height: size }}
@@ -101,29 +103,27 @@ export function SlaRing({
         height={size}
         viewBox={`0 0 ${size} ${size}`}
         className="rotate-[-90deg] overflow-visible"
-        aria-hidden="true"
       >
-        {/* Background track */}
+        {/* Track */}
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke={scheme.track}
-          strokeWidth={strokeWidth}
           fill="none"
+          strokeWidth={strokeWidth}
+          className={cn("stroke-current transition-colors duration-200", scheme.track)}
         />
-        {/* Progress stroke */}
+        {/* Progress Fill */}
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke={scheme.stroke}
+          fill="none"
           strokeWidth={strokeWidth}
           strokeDasharray={circumference}
           strokeDashoffset={strokeDashoffset}
           strokeLinecap="round"
-          fill="none"
-          className="transition-all duration-300 ease-out"
+          className={cn("stroke-current transition-all duration-300 ease-out", scheme.stroke)}
         />
       </svg>
     </div>
@@ -131,23 +131,13 @@ export function SlaRing({
 
   if (!showTooltip) return ringElement;
 
-  const tooltipContent = (
-    <span className="font-mono-numbers">
-      {pctDisplay}% elapsed
-      {secondsLeft !== null ? (
-        secondsLeft < 0 ? (
-          ` • Breached by ${Math.abs(secondsLeft)}s`
-        ) : (
-          ` • ${secondsLeft}s ticking`
-        )
-      ) : (
-        ""
-      )}
-    </span>
-  );
+  const tooltipText =
+    secondsLeft !== null
+      ? `${pctDisplay}% elapsed (${Math.abs(secondsLeft)}s remaining)`
+      : `${pctDisplay}% SLA elapsed`;
 
   return (
-    <Tooltip content={tooltipContent} position="top" delayMs={200}>
+    <Tooltip content={tooltipText} position="top">
       {ringElement}
     </Tooltip>
   );
