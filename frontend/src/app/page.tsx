@@ -323,7 +323,7 @@ export default function QueuePage() {
             description={
               hasActiveFilters
                 ? "Try adjusting your search keywords or resetting active filters."
-                : "Your operations dispatch queue is clear. Good job!"
+                : "Your operations dispatch queue is clear. All cases resolved."
             }
             actionLabel={hasActiveFilters ? "Clear active filters" : "Create new ticket"}
             onAction={hasActiveFilters ? handleClearFilters : () => setIsCreateOpen(true)}

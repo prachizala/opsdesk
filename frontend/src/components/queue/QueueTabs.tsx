@@ -11,7 +11,7 @@ import {
   LayoutList,
   Ticket as TicketIcon,
 } from "lucide-react";
-import { Tabs, TabItem, Button } from "@/components/ui";
+import { SegmentedTabs, TabItem, Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 export interface QueueTabsProps {
@@ -93,15 +93,13 @@ export function QueueTabs({
 
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-1">
-      {/* Gliding Underline Tabs */}
+      {/* SegmentedTabs with sliding pill + count chips */}
       <div className="flex-1 min-w-0">
-        <Tabs
+        <SegmentedTabs
           tabs={tabs}
           activeTab={activeTab}
           onChange={onTabChange}
-          variant="underline"
           ariaLabel="Operations queue tabs"
-          className="border-b-0"
         />
       </div>
 

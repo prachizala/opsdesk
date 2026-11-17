@@ -24,7 +24,7 @@ export function QueueCardsView({
   onRefresh,
 }: QueueCardsViewProps) {
   const router = useRouter();
-  const { currentUser } = useUser();
+  const { currentUser, isStaff } = useUser();
   const { showToast } = useToast();
 
   const handleAssignToMe = async (ticketId: string, e: React.MouseEvent) => {
@@ -101,14 +101,21 @@ export function QueueCardsView({
               } else if (e.key === " " && onSelectTicket) {
                 e.preventDefault();
                 onSelectTicket(t.id);
+              } else if (e.key === "ArrowDown" || e.key === "j") {
+                e.preventDefault();
+                const nextEl = e.currentTarget.nextElementSibling as HTMLElement | null;
+                if (nextEl) nextEl.focus();
+              } else if (e.key === "ArrowUp" || e.key === "k") {
+                e.preventDefault();
+                const prevEl = e.currentTarget.previousElementSibling as HTMLElement | null;
+                if (prevEl) prevEl.focus();
               }
             }}
             tabIndex={0}
             role="button"
             aria-label={`Boarding pass ticket ${t.id} - ${t.title}`}
             className={cn(
-              "relative bg-surface border border-border rounded-card shadow-xs overflow-hidden flex flex-col justify-between cursor-pointer transition-all duration-200 select-none",
-              "hover:rotate-[1.5deg] hover:scale-[1.01] hover:shadow-md",
+              "group relative bg-surface border border-border rounded-card shadow-xs overflow-hidden flex flex-col justify-between cursor-pointer transition-colors duration-150 select-none hover:border-brand-500/50 hover:shadow-sm",
               isSelected && "ring-2 ring-brand-500",
               isClosedOrResolved && "opacity-60"
             )}
@@ -155,7 +162,7 @@ export function QueueCardsView({
                 <p className="text-table font-semibold text-content-primary line-clamp-2 leading-snug">
                   {t.title}
                 </p>
-                {t.routing_reason && (
+                {isStaff && t.routing_reason && (
                   <p className="text-[11px] text-content-tertiary mt-1 line-clamp-1 italic">
                     Reason: {t.routing_reason}
                   </p>
@@ -178,12 +185,18 @@ export function QueueCardsView({
               </div>
             </div>
 
-            {/* Perforated Divider with Notch Cutouts */}
-            <div className="relative w-full flex items-center justify-between bg-surface px-0 my-0">
+            {/* Perforated Divider with Notch Cutouts & Hover Shimmer on Perforation Line Only */}
+            <div className="relative w-full flex items-center justify-between bg-surface px-0 my-0 overflow-hidden">
               {/* Left Notch */}
               <div className="w-4 h-4 rounded-full bg-canvas border border-border -ml-2 shrink-0 z-10" />
-              {/* Dashed perforation line */}
-              <div className="flex-1 border-t-2 border-dashed border-border" />
+              {/* Dashed perforation line with hover shimmer */}
+              <div className="relative flex-1 py-1 flex items-center overflow-hidden">
+                <div className="w-full border-t-2 border-dashed border-border group-hover:border-brand-500/60 transition-colors" />
+                <div
+                  className="absolute inset-y-0 -left-full w-1/2 bg-gradient-to-r from-transparent via-brand-500/30 to-transparent group-hover:translate-x-[300%] transition-transform duration-700 ease-out pointer-events-none"
+                  aria-hidden="true"
+                />
+              </div>
               {/* Right Notch */}
               <div className="w-4 h-4 rounded-full bg-canvas border border-border -mr-2 shrink-0 z-10" />
             </div>
@@ -203,30 +216,32 @@ export function QueueCardsView({
                 </span>
               </div>
 
-              {/* Quick Actions */}
+              {/* Quick Actions (Staff only for mutations) */}
               <div className="flex items-center gap-1">
-                {!t.assigned_to && (
+                {isStaff && !t.assigned_to && (
                   <button
                     type="button"
                     onClick={(e) => handleAssignToMe(t.id, e)}
-                    className="p-1.5 rounded-input bg-surface hover:bg-brand-50 text-brand-700 border border-border hover:border-brand-300 shadow-xs text-[11px] font-medium transition-colors"
+                    className="p-1.5 rounded-input bg-surface hover:bg-brand-50 text-brand-700 border border-border hover:border-brand-300 shadow-xs text-[11px] font-medium transition-colors cursor-pointer"
                     title="Assign to me"
                   >
                     <UserPlus className="w-3.5 h-3.5 text-brand-600" />
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={(e) => handleEscalate(t.id, e)}
-                  className="p-1.5 rounded-input bg-surface hover:bg-amber-50 text-amber-700 border border-border hover:border-amber-300 shadow-xs text-[11px] font-medium transition-colors"
-                  title="Escalate ticket"
-                >
-                  <ArrowUpCircle className="w-3.5 h-3.5 text-amber-600" />
-                </button>
+                {isStaff && (
+                  <button
+                    type="button"
+                    onClick={(e) => handleEscalate(t.id, e)}
+                    className="p-1.5 rounded-input bg-surface hover:bg-amber-50 text-amber-700 border border-border hover:border-amber-300 shadow-xs text-[11px] font-medium transition-colors cursor-pointer"
+                    title="Escalate ticket"
+                  >
+                    <ArrowUpCircle className="w-3.5 h-3.5 text-amber-600" />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={(e) => handleCopyTboh(t.tboh_id, e)}
-                  className="p-1.5 rounded-input bg-surface hover:bg-surface-subtle text-content-secondary border border-border shadow-xs text-[11px] font-medium transition-colors"
+                  className="p-1.5 rounded-input bg-surface hover:bg-surface-subtle text-content-secondary border border-border shadow-xs text-[11px] font-medium transition-colors cursor-pointer"
                   title="Copy TBOH"
                 >
                   <Copy className="w-3.5 h-3.5" />
@@ -237,7 +252,7 @@ export function QueueCardsView({
                     e.stopPropagation();
                     router.push(`/ticket/${t.id}`);
                   }}
-                  className="p-1.5 rounded-input bg-brand-600 hover:bg-brand-700 text-white shadow-xs text-[11px] font-medium transition-colors"
+                  className="p-1.5 rounded-input bg-brand-600 hover:bg-brand-700 text-white shadow-xs text-[11px] font-medium transition-colors cursor-pointer"
                   title="Open ticket details"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />

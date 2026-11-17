@@ -145,7 +145,7 @@ export function CreateTicketModal({
       onClose={onClose}
       title="Create Operations Ticket"
       subtitle="Dispatch an operations incident with atomic tenant verification and travel SLA computation."
-      className="max-w-[640px] rounded-[14px]"
+      className="max-w-[640px] rounded-[24px]"
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4 pt-1">
         {error && (

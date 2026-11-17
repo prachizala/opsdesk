@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import { TicketSummary } from "@/lib/types";
-import { SpotlightGlow, CountUp } from "@/components/ui";
+import { CountUp } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 export interface QueueKpiStripProps {
@@ -51,10 +51,8 @@ export function QueueKpiStrip({
       count: stats.openCount,
       barCount: stats.onTrackCount,
       pct: (stats.onTrackCount / safeSum) * 100,
-      color: "bg-[#15803D]",
-      textColor: "text-[#15803D]",
-      bgLight: "bg-[#DCFCE7]",
-      borderColor: "border-[#15803D]",
+      color: "bg-emerald-600 dark:bg-emerald-500",
+      textColor: "text-emerald-700 dark:text-emerald-400",
     },
     {
       key: "AT_RISK" as const,
@@ -62,10 +60,8 @@ export function QueueKpiStrip({
       count: stats.atRiskCount,
       barCount: stats.atRiskCount,
       pct: (stats.atRiskCount / safeSum) * 100,
-      color: "bg-[#B45309]",
-      textColor: "text-[#B45309]",
-      bgLight: "bg-[#FEF3C7]",
-      borderColor: "border-[#B45309]",
+      color: "bg-amber-500 dark:bg-amber-400",
+      textColor: "text-amber-700 dark:text-amber-400",
     },
     {
       key: "BREACHED" as const,
@@ -73,10 +69,8 @@ export function QueueKpiStrip({
       count: stats.breachedCount,
       barCount: stats.breachedCount,
       pct: (stats.breachedCount / safeSum) * 100,
-      color: "bg-[#B91C1C]",
-      textColor: "text-[#B91C1C]",
-      bgLight: "bg-[#FEE2E2]",
-      borderColor: "border-[#B91C1C]",
+      color: "bg-rose-600 dark:bg-rose-500",
+      textColor: "text-rose-700 dark:text-rose-400",
     },
     {
       key: "UNASSIGNED" as const,
@@ -84,10 +78,8 @@ export function QueueKpiStrip({
       count: stats.unassignedCount,
       barCount: stats.unassignedCount,
       pct: Math.min((stats.unassignedCount / safeSum) * 100, 100),
-      color: "bg-[#64748B]",
-      textColor: "text-[#64748B]",
-      bgLight: "bg-[#F1F5F9]",
-      borderColor: "border-[#64748B]",
+      color: "bg-slate-400 dark:bg-slate-500",
+      textColor: "text-slate-700 dark:text-slate-400",
     },
   ];
 
@@ -101,9 +93,7 @@ export function QueueKpiStrip({
   };
 
   return (
-    <SpotlightGlow
-      glowColor="rgba(14, 154, 167, 0.12)"
-      glowRadius={360}
+    <div
       className={cn(
         "bg-surface border border-border rounded-card p-4 shadow-xs select-none flex flex-col gap-3",
         className
@@ -189,6 +179,6 @@ export function QueueKpiStrip({
           );
         })}
       </div>
-    </SpotlightGlow>
+    </div>
   );
 }
