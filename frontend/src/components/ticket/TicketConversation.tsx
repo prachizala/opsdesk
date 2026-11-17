@@ -17,6 +17,9 @@ import {
   Globe,
   RotateCcw,
   MessageSquare,
+  Copy,
+  Check,
+  Quote,
 } from "lucide-react";
 import { cn, formatDate, formatRelativeTime } from "@/lib/utils";
 import { TicketSupplierThreads } from "./TicketSupplierThreads";
@@ -56,6 +59,9 @@ export function TicketConversation({
   const [content, setContent] = useState<string>("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Copy & Quote state
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+
   // Auto-grow textarea effect
   useEffect(() => {
     if (textareaRef.current) {
@@ -89,8 +95,33 @@ export function TicketConversation({
     }
   };
 
-  // Determine role of message sender for role badge
-  const getSenderRole = (userId: string, senderName: string): { label: string; variant: "brand" | "subtle" | "default" } => {
+  // Copy message text to clipboard
+  const handleCopyMessage = (msg: TicketMessage) => {
+    navigator.clipboard.writeText(msg.content);
+    setCopiedMessageId(msg.id);
+    setTimeout(() => {
+      setCopiedMessageId((prev) => (prev === msg.id ? null : prev));
+    }, 2000);
+  };
+
+  // Quote message into composer
+  const handleQuoteMessage = (msg: TicketMessage) => {
+    const quoteText = `> ${msg.sender_name}: "${msg.content}"\n\n`;
+    setContent((prev) => (prev ? `${prev}\n${quoteText}` : quoteText));
+    // If quoting an internal note as staff, switch to internal tab; otherwise public
+    if (isStaff && msg.message_type === "InternalNote") {
+      setActiveTab("internal");
+    } else {
+      setActiveTab("public");
+    }
+    textareaRef.current?.focus();
+  };
+
+  // Determine role of message sender for role chip
+  const getSenderRole = (
+    userId: string,
+    senderName: string
+  ): { label: string; variant: "brand" | "subtle" | "default" } => {
     const user = DEMO_USERS.find((u) => u.id === userId || u.name === senderName);
     if (user) {
       if (user.role === "Lead") return { label: "Operations Lead", variant: "brand" };
@@ -101,7 +132,7 @@ export function TicketConversation({
     return { label: "Staff", variant: "default" };
   };
 
-  // Filter messages based on role visibility
+  // Filter messages based on role visibility (Requesters NEVER see internal notes)
   const visibleMessages: TicketMessage[] = (ticket.messages || []).filter((m) => {
     if (!isStaff) return m.message_type === "PublicReply";
     return true;
@@ -109,7 +140,7 @@ export function TicketConversation({
 
   const supplierThreadCount = ticket.side_conversations?.length || 0;
 
-  // Build tabs based on role
+  // Build segmented tabs based on role
   const tabsList = isStaff
     ? [
         { id: "public", label: "Public Reply" },
@@ -119,7 +150,7 @@ export function TicketConversation({
       ]
     : [
         { id: "public", label: "Conversation" },
-        { id: "activity", label: "Audit Timeline" },
+        { id: "activity", label: "Activity Timeline" },
       ];
 
   return (
@@ -160,7 +191,7 @@ export function TicketConversation({
           />
         </div>
 
-        {/* TAB 1: Supplier Threads */}
+        {/* TAB 1: Supplier Threads (Staff Only) */}
         {activeTab === "suppliers" && isStaff ? (
           <TicketSupplierThreads
             ticket={ticket}
@@ -179,22 +210,24 @@ export function TicketConversation({
           /* TAB 3 & 4: Public Reply or Internal Note Stream + Composer */
           <div className="p-5 space-y-6">
             {/* Messages Stream */}
-            <div className="space-y-4 max-h-[480px] overflow-y-auto pr-1">
+            <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
               {visibleMessages.length > 0 ? (
                 visibleMessages.map((msg) => {
                   const isInternal = msg.message_type === "InternalNote";
                   const roleInfo = getSenderRole(msg.sender_user_id, msg.sender_name);
+                  const isCopied = copiedMessageId === msg.id;
 
                   return (
                     <div
                       key={msg.id}
                       className={cn(
-                        "rounded-card p-4 transition-subtle",
+                        "group relative rounded-card p-4 transition-all duration-200",
                         isInternal
-                          ? "bg-amber-50/70 border border-amber-300 border-dashed"
+                          ? "bg-yellow-50 border border-amber-300 border-dashed"
                           : "bg-surface border border-border shadow-xs"
                       )}
                     >
+                      {/* Bubble Header */}
                       <div className="flex items-center justify-between gap-3 mb-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <Avatar name={msg.sender_name} size="sm" />
@@ -205,7 +238,7 @@ export function TicketConversation({
                             {roleInfo.label}
                           </Chip>
                           {isInternal ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded border border-amber-200">
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-900 bg-amber-100/90 px-2 py-0.5 rounded border border-amber-200">
                               <Lock className="w-3 h-3 text-amber-700" />
                               Internal Note
                             </span>
@@ -217,14 +250,46 @@ export function TicketConversation({
                           )}
                         </div>
 
-                        {/* Relative time with absolute in tooltip */}
-                        <Tooltip content={formatDate(msg.created_at)}>
-                          <span className="text-caption text-content-tertiary cursor-default">
-                            {formatRelativeTime(msg.created_at)}
-                          </span>
-                        </Tooltip>
+                        {/* Top-right Actions: Hover Copy / Quote & Timestamp */}
+                        <div className="flex items-center gap-2">
+                          {/* Hover Action Buttons */}
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                            <Tooltip content={isCopied ? "Copied!" : "Copy message"}>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyMessage(msg)}
+                                aria-label="Copy message text"
+                                className="p-1 rounded hover:bg-slate-200/60 text-content-secondary hover:text-content-primary transition-colors cursor-pointer"
+                              >
+                                {isCopied ? (
+                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </Tooltip>
+                            <Tooltip content="Quote message in composer">
+                              <button
+                                type="button"
+                                onClick={() => handleQuoteMessage(msg)}
+                                aria-label="Quote message"
+                                className="p-1 rounded hover:bg-slate-200/60 text-content-secondary hover:text-content-primary transition-colors cursor-pointer"
+                              >
+                                <Quote className="w-3.5 h-3.5" />
+                              </button>
+                            </Tooltip>
+                          </div>
+
+                          {/* Relative time with absolute in tooltip */}
+                          <Tooltip content={formatDate(msg.created_at)}>
+                            <span className="text-caption text-content-tertiary cursor-default">
+                              {formatRelativeTime(msg.created_at)}
+                            </span>
+                          </Tooltip>
+                        </div>
                       </div>
 
+                      {/* Message Content */}
                       <div
                         className={cn(
                           "text-body whitespace-pre-wrap leading-relaxed pl-8",
@@ -252,9 +317,9 @@ export function TicketConversation({
             <form
               onSubmit={handleSubmit}
               className={cn(
-                "rounded-card p-4 border transition-subtle space-y-3",
+                "rounded-card p-4 border transition-all duration-200 space-y-3",
                 activeTab === "internal"
-                  ? "bg-amber-50/70 border-amber-300"
+                  ? "bg-yellow-50 border-amber-300"
                   : "bg-white border-border"
               )}
             >

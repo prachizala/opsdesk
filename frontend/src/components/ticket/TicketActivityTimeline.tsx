@@ -2,17 +2,27 @@
 
 import React, { useMemo } from "react";
 import { TicketDetail } from "@/lib/types";
-import { Tooltip } from "@/components/ui";
+import { Tooltip, Chip } from "@/components/ui";
 import { formatDate, formatRelativeTime, cn } from "@/lib/utils";
 import { Clock } from "lucide-react";
 
 export interface ActivityEvent {
   id: string;
-  type: "created" | "public_reply" | "internal_note" | "supplier_thread" | "assigned" | "escalated" | "status" | "bug_linked";
+  type:
+    | "created"
+    | "public_reply"
+    | "internal_note"
+    | "supplier_thread"
+    | "assigned"
+    | "escalated"
+    | "status"
+    | "bug_linked";
+  typeName: string;
   actor: string;
   timestamp: string;
   summary: string;
-  dotColor: string; // Tailwind class
+  detail?: string;
+  dotColor: string; // Tailwind bg class
 }
 
 export interface TicketActivityTimelineProps {
@@ -28,9 +38,11 @@ export function TicketActivityTimeline({ ticket }: TicketActivityTimelineProps) 
     list.push({
       id: "ev-create",
       type: "created",
+      typeName: "Ticket Created",
       actor: ticket.agency_id || "Agency",
       timestamp: ticket.created_at,
-      summary: `Ticket created for booking ${ticket.tboh_id} (${ticket.priority} priority)`,
+      summary: `Ticket created for reservation ${ticket.tboh_id}`,
+      detail: `Initial priority set to ${ticket.priority} with status ${ticket.status}. Check-in scheduled for ${formatDate(ticket.check_in_date)}.`,
       dotColor: "bg-blue-500",
     });
 
@@ -41,12 +53,14 @@ export function TicketActivityTimeline({ ticket }: TicketActivityTimelineProps) 
       list.push({
         id: `ev-msg-${msg.id}`,
         type: isInternal ? "internal_note" : "public_reply",
+        typeName: isInternal ? "Internal Note Logged" : "Public Reply Dispatched",
         actor: msg.sender_name || (isInternal ? "Staff Member" : "Agency Agent"),
         timestamp: msg.created_at,
         summary: isInternal
           ? `Recorded internal staff note: "${snippet}"`
           : `Dispatched public reply to agency: "${snippet}"`,
-        dotColor: isInternal ? "bg-amber-500" : "bg-blue-600",
+        detail: msg.content,
+        dotColor: isInternal ? "bg-amber-500" : "bg-teal-600",
       });
     });
 
@@ -55,10 +69,12 @@ export function TicketActivityTimeline({ ticket }: TicketActivityTimelineProps) 
       list.push({
         id: `ev-sc-${sc.id}`,
         type: "supplier_thread",
+        typeName: "Supplier Thread Initiated",
         actor: sc.created_by || "Operations Agent",
         timestamp: sc.created_at,
-        summary: `Initiated supplier thread with ${sc.supplier_name} ("${sc.subject}")`,
-        dotColor: "bg-teal-500",
+        summary: `Initiated supplier thread with ${sc.supplier_name}`,
+        detail: `Subject: "${sc.subject}" | Recipients: ${sc.recipients.join(", ")}`,
+        dotColor: "bg-cyan-500",
       });
     });
 
@@ -67,9 +83,11 @@ export function TicketActivityTimeline({ ticket }: TicketActivityTimelineProps) 
       list.push({
         id: "ev-assign",
         type: "assigned",
+        typeName: "Ownership Assigned",
         actor: ticket.assigned_to,
         timestamp: ticket.updated_at || ticket.created_at,
         summary: `Case claimed and assigned to ${ticket.assigned_to}`,
+        detail: "Ticket routing verified and assigned to specialist queue.",
         dotColor: "bg-emerald-500",
       });
     }
@@ -79,10 +97,12 @@ export function TicketActivityTimeline({ ticket }: TicketActivityTimelineProps) 
       list.push({
         id: "ev-escalate",
         type: "escalated",
-        actor: "Operations Lead",
+        typeName: "Escalated to Manager",
+        actor: "Operations Escalation Lead",
         timestamp: ticket.updated_at || ticket.created_at,
-        summary: "Case escalated to Global Escalation Manager queue",
-        dotColor: "bg-purple-600",
+        summary: "Case escalated to Global Escalation Manager queue (Vikram Joshi)",
+        detail: "Urgent priority assigned; expedited resolution protocols activated.",
+        dotColor: "bg-violet-600",
       });
     }
 
@@ -91,9 +111,11 @@ export function TicketActivityTimeline({ ticket }: TicketActivityTimelineProps) 
       list.push({
         id: "ev-bug",
         type: "bug_linked",
+        typeName: "Product Defect Associated",
         actor: "Product Engineering",
         timestamp: ticket.updated_at || ticket.created_at,
         summary: `Associated product defect link: ${ticket.suggested_bug_link}`,
+        detail: `Referenced defect link: ${ticket.suggested_bug_link}`,
         dotColor: "bg-rose-500",
       });
     }
@@ -162,32 +184,45 @@ export function TicketActivityTimeline({ ticket }: TicketActivityTimelineProps) 
             </div>
 
             {/* Vertical Line with 10px Coloured Dots */}
-            <div className="relative pl-6 space-y-4 border-l-2 border-slate-200 ml-2.5">
+            <div className="relative pl-7 space-y-5 border-l-2 border-slate-200 ml-3">
               {dayEvents.map((ev) => (
                 <div key={ev.id} className="relative group">
-                  {/* 10px Coloured Dot */}
+                  {/* 10px Coloured Dot (grows on hover) */}
                   <div
                     className={cn(
-                      "absolute -left-[30px] top-1 w-2.5 h-2.5 rounded-full ring-4 ring-surface transition-transform group-hover:scale-125",
+                      "absolute -left-[35px] top-1.5 w-2.5 h-2.5 rounded-full ring-4 ring-surface transition-transform duration-200 group-hover:scale-150 cursor-pointer shadow-xs",
                       ev.dotColor
                     )}
                   />
 
-                  {/* Event Details */}
+                  {/* Event Summary & Interactive Hover Detail Card */}
                   <div className="text-table">
-                    <div className="flex items-center gap-2 text-caption">
+                    <div className="flex flex-wrap items-center gap-2 text-caption">
                       <span className="font-semibold text-content-primary">
                         {ev.actor}
                       </span>
+                      <Chip size="sm" variant="subtle" className="text-[10px] h-[18px] px-1.5">
+                        {ev.typeName}
+                      </Chip>
                       <Tooltip content={formatDate(ev.timestamp)}>
-                        <span className="text-content-tertiary text-[11px] cursor-default">
+                        <span className="text-content-tertiary text-[11px] cursor-default ml-auto">
                           {formatRelativeTime(ev.timestamp)}
                         </span>
                       </Tooltip>
                     </div>
-                    <p className="text-content-secondary mt-0.5 text-caption leading-relaxed">
+
+                    <p className="text-content-secondary mt-1 text-caption leading-relaxed">
                       {ev.summary}
                     </p>
+
+                    {/* Detail Card revealed on hover */}
+                    {ev.detail && ev.detail !== ev.summary && (
+                      <div className="hidden group-hover:block mt-2 p-2.5 rounded-input bg-surface-subtle border border-border text-[12px] text-content-primary shadow-xs animate-in fade-in duration-150">
+                        <p className="font-mono-numbers whitespace-pre-wrap leading-snug">
+                          {ev.detail}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

@@ -41,6 +41,9 @@ export default function TicketDetailPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Short violet transition pulse after successful escalation
+  const [escalatedSuccess, setEscalatedSuccess] = useState(false);
+
   // Mobile column switcher: "conversation" | "context" | "insights"
   const [mobileTab, setMobileTab] = useState<"conversation" | "context" | "insights">("conversation");
 
@@ -126,6 +129,8 @@ export default function TicketDetailPage() {
     try {
       await escalateTicket(ticketId, reason, currentUser.id);
       setEscalateModalOpen(false);
+      setEscalatedSuccess(true);
+      setTimeout(() => setEscalatedSuccess(false), 3500);
       showToast("Ticket escalated to Operations Escalation Manager (Vikram Joshi)", "warning");
       loadTicket();
     } catch (err: unknown) {
@@ -272,6 +277,7 @@ export default function TicketDetailPage() {
         onStatusChange={handleStatusChange}
         onOpenEscalate={() => setEscalateModalOpen(true)}
         onOpenTransfer={() => setTransferModalOpen(true)}
+        escalatedSuccess={escalatedSuccess}
       />
 
       {/* 2. MOBILE STICKY NAVIGATION TABS (< 768px) */}
@@ -332,7 +338,7 @@ export default function TicketDetailPage() {
               mobileTab !== "context" && "hidden md:block"
             )}
           >
-            <TicketBookingContext ticket={ticket} />
+            <TicketBookingContext ticket={ticket} currentUserId={currentUser.id} />
           </div>
 
           {/* CENTRE COLUMN: Conversation */}
@@ -368,6 +374,7 @@ export default function TicketDetailPage() {
             <TicketInsightRail
               ticket={ticket}
               onOpenBugModal={() => setBugModalOpen(true)}
+              currentUserId={currentUser.id}
             />
           </div>
         </div>
@@ -381,7 +388,7 @@ export default function TicketDetailPage() {
               mobileTab !== "context" && "hidden md:block"
             )}
           >
-            <TicketBookingContext ticket={ticket} />
+            <TicketBookingContext ticket={ticket} currentUserId={currentUser.id} />
           </div>
 
           {/* CENTRE COLUMN */}
