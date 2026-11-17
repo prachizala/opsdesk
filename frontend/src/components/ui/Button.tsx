@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "ghost" | "danger";
+  variant?: "primary" | "secondary" | "ghost" | "danger" | "outline";
   size?: "sm" | "md";
   loading?: boolean;
   icon?: React.ReactNode;
@@ -37,13 +37,15 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
     const variantStyles = {
       primary:
-        "bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-700 border border-transparent shadow-sm",
+        "bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-700 border border-transparent shadow-xs",
       secondary:
-        "bg-surface text-content-primary hover:bg-surface-subtle border border-border hover:border-border-strong shadow-sm",
+        "bg-surface text-content-primary hover:bg-surface-subtle border border-border hover:border-border-strong shadow-xs",
+      outline:
+        "bg-transparent text-content-primary hover:bg-surface-subtle border border-border hover:border-border-strong shadow-xs",
       ghost:
         "bg-transparent text-content-secondary hover:text-content-primary hover:bg-surface-subtle",
       danger:
-        "bg-red-600 text-white hover:bg-red-700 active:bg-red-800 border border-transparent shadow-sm",
+        "bg-red-600 text-white hover:bg-red-700 active:bg-red-800 border border-transparent shadow-xs",
     };
 
     return (
@@ -58,7 +60,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         ) : (
           icon && iconPosition === "left" && <span className="shrink-0">{icon}</span>
         )}
-        <span>{children}</span>
+        {children && <span>{children}</span>}
         {!loading && icon && iconPosition === "right" && (
           <span className="shrink-0">{icon}</span>
         )}
@@ -69,7 +71,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 Button.displayName = "Button";
 
 export interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "ghost" | "danger";
+  variant?: "primary" | "secondary" | "ghost" | "danger" | "outline";
   size?: "sm" | "md";
   loading?: boolean;
   "aria-label": string;
@@ -94,8 +96,11 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
     };
 
     const variantStyles = {
-      primary: "bg-brand-600 text-white hover:bg-brand-700 shadow-sm",
-      secondary: "bg-surface text-content-secondary hover:text-content-primary border border-border hover:border-border-strong shadow-sm",
+      primary: "bg-brand-600 text-white hover:bg-brand-700 shadow-xs",
+      secondary:
+        "bg-surface text-content-secondary hover:text-content-primary border border-border hover:border-border-strong shadow-xs",
+      outline:
+        "bg-transparent text-content-secondary hover:text-content-primary border border-border hover:border-border-strong shadow-xs",
       ghost: "bg-transparent text-content-secondary hover:text-content-primary hover:bg-surface-subtle",
       danger: "bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700",
     };

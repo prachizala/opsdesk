@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { UserProvider } from "@/context/UserContext";
 import { ToastProvider } from "@/context/ToastContext";
-import { TopNav } from "@/components/TopNav";
-import { Sidebar } from "@/components/Sidebar";
+import { TopNav, Sidebar } from "@/components/shell";
 import { CommandPalette } from "@/components/CommandPalette";
 
 export const metadata: Metadata = {

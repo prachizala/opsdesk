@@ -29,7 +29,7 @@
   --brand-600: #0B7F8B;
   --brand-700: #0A6772;
 
-  /* SLA Semantic Tokens (Always paired with Icon + Label) */
+  /* SLA Semantic Tokens */
   --sla-normal-text: #15803D;
   --sla-normal-bg: #DCFCE7;
   --sla-at-risk-text: #B45309;
@@ -38,18 +38,20 @@
   --sla-breached-bg: #FEE2E2;
   --sla-escalated-text: #6D28D9;
   --sla-escalated-bg: #EDE9FE;
+  --sla-stopped-text: #64748B;
+  --sla-stopped-bg: #F1F3F6;
 
-  /* Priority Tokens */
+  /* Priority Tokens (Soft Tint, No Border) */
   --priority-urgent-text: #B91C1C;
   --priority-urgent-bg: #FEE2E2;
   --priority-high-text: #C2410C;
   --priority-high-bg: #FFEDD5;
   --priority-medium-text: #1D4ED8;
   --priority-medium-bg: #DBEAFE;
-  --priority-low-text: #475569;
-  --priority-low-bg: #F1F5F9;
+  --priority-low-text: #64748B;
+  --priority-low-bg: #F1F3F6;
 
-  /* Status Tokens */
+  /* Status Tokens (Soft Tint, No Border) */
   --status-new-text: #1D4ED8;
   --status-new-bg: #EFF6FF;
   --status-open-text: #0E9AA7;
@@ -60,11 +62,12 @@
   --status-escalated-bg: #EDE9FE;
   --status-resolved-text: #15803D;
   --status-resolved-bg: #DCFCE7;
-  --status-closed-text: #475569;
-  --status-closed-bg: #F1F5F9;
+  --status-closed-text: #64748B;
+  --status-closed-bg: #F1F3F6;
 
   /* Geometry & Radius */
   --radius-input: 6px;
+  --radius-chip: 6px;
   --radius-card: 10px;
   --radius-modal: 14px;
 
@@ -88,7 +91,7 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Strict focus visible ring (2px brand-500 with 2px offset) */
+  /* Strict focus visible ring: 2px brand-500 with 2px offset */
   a:focus-visible,
   button:focus-visible,
   input:focus-visible,
@@ -119,6 +122,22 @@
   transition-duration: var(--duration-panel);
 }
 
+/* Pulse animation for breached SLA ring */
+@keyframes sla-breach-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.65;
+    transform: scale(1.08);
+  }
+}
+
+.animate-sla-breach {
+  animation: sla-breach-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
 /* Accessibility: respects reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -128,5 +147,9 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  .animate-sla-breach {
+    animation: none !important;
   }
 }
