@@ -16,7 +16,6 @@ export interface FlightPathTimelineProps {
 
 export function FlightPathTimeline({
   nowDate,
-  createdAt,
   lcd,
   checkIn,
   controllingDeadline,
@@ -79,65 +78,83 @@ export function FlightPathTimeline({
 
   // Compact Variant (~20px height for table rows)
   if (variant === "compact") {
+    const formattedLcd = lcd ? formatDate(lcd).split(",")[0] : null;
+    const formattedCheckin = checkIn ? formatDate(checkIn).split(",")[0] : null;
+
     return (
       <div
         className={cn(
-          "flex items-center gap-2 h-5 text-[12px] font-mono-numbers select-none whitespace-nowrap",
+          "flex items-center gap-1.5 h-4 text-[10px] font-mono-numbers select-none w-full max-w-full overflow-hidden",
           className
         )}
-        title={
-          createdAt
-            ? `Flight Path: NOW -> LCD Gate (${lcd ? formatDate(lcd) : "None"}) -> Check-in (${checkIn ? formatDate(checkIn) : "None"})`
-            : `Flight Path: NOW -> LCD Gate (${lcd ? formatDate(lcd) : "None"}) -> Check-in (${checkIn ? formatDate(checkIn) : "None"})`
-        }
+        title={`Flight Path: NOW -> LCD Gate (${lcd ? formatDate(lcd) : "None"}) -> Check-in (${checkIn ? formatDate(checkIn) : "None"})`}
       >
-        <span className="text-content-disabled font-medium text-[11px] flex items-center gap-1">
-          <Plane className="w-3 h-3 rotate-45 shrink-0" style={{ color: planeColor }} />
-          NOW
+        <span className="text-content-tertiary font-medium text-[10px] flex items-center gap-0.5 shrink-0">
+          <Plane className="w-2.5 h-2.5 rotate-45 shrink-0" style={{ color: planeColor }} />
+          <span>NOW</span>
         </span>
-        <div className="relative w-28 h-1.5 bg-surface-subtle rounded-full overflow-visible flex items-center border border-border">
-          {/* Dotted / dashed track */}
+
+        {/* Responsive Track */}
+        <div className="relative flex-1 min-w-[24px] h-1 bg-surface-subtle rounded-full flex items-center border border-border shrink overflow-visible">
           <div className="absolute inset-0 border-b border-dashed border-border-strong top-0" />
-          
-          {/* LCD Gate Marker dot */}
+          {/* LCD Gate Marker */}
           <div
             className={cn(
-              "absolute left-1/2 -translate-x-1/2 w-2 h-2 rounded-full border",
+              "absolute left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full border",
               isLcdPast
                 ? "bg-slate-400 border-slate-300"
                 : effectiveControlling === "LCD"
-                ? "bg-departure-amber border-amber-300 ring-2 ring-amber-100"
+                ? "bg-departure-amber border-amber-300 ring-1 ring-amber-200"
                 : "bg-brand-600 border-white"
             )}
+            title={lcd ? `LCD Gate: ${formatDate(lcd)}` : "No LCD"}
+          />
+          {/* Check-in Marker */}
+          <div
+            className={cn(
+              "absolute right-0 w-1.5 h-1.5 rounded-full border",
+              isCheckInPast
+                ? "bg-slate-400 border-slate-300"
+                : effectiveControlling === "CHECK_IN"
+                ? "bg-brand-600 border-brand-300 ring-1 ring-brand-200"
+                : "bg-slate-400 border-white"
+            )}
+            title={checkIn ? `Check-in: ${formatDate(checkIn)}` : "No Check-in"}
           />
         </div>
 
-        <div className="flex items-center gap-1.5">
-          <span
-            className={cn(
-              "text-[11px] px-1 py-0.2 rounded font-medium",
-              isLcdPast
-                ? "text-content-disabled line-through"
-                : effectiveControlling === "LCD"
-                ? "bg-amber-50 text-amber-700 font-semibold border border-amber-200"
-                : "text-content-secondary"
-            )}
-          >
-            Gate {lcd ? formatDate(lcd).split(",")[0] : "—"}
-          </span>
-          <span className="text-content-disabled text-[10px]">→</span>
-          <span
-            className={cn(
-              "text-[11px] px-1 py-0.2 rounded font-medium",
-              isCheckInPast
-                ? "text-content-disabled line-through"
-                : effectiveControlling === "CHECK_IN"
-                ? "bg-brand-50 text-brand-700 font-semibold border border-brand-200"
-                : "text-content-secondary"
-            )}
-          >
-            In {checkIn ? formatDate(checkIn).split(",")[0] : "—"}
-          </span>
+        {/* Milestone indicators */}
+        <div className="flex items-center gap-1 shrink-0 text-[10px]">
+          {formattedLcd && (
+            <span
+              className={cn(
+                "px-1 py-0.2 rounded font-medium truncate max-w-[62px]",
+                isLcdPast
+                  ? "text-content-disabled line-through"
+                  : effectiveControlling === "LCD"
+                  ? "bg-amber-50 text-amber-700 font-semibold border border-amber-200"
+                  : "text-content-tertiary"
+              )}
+              title={`LCD Gate: ${formatDate(lcd)}`}
+            >
+              Gate {formattedLcd}
+            </span>
+          )}
+          {formattedCheckin && (
+            <span
+              className={cn(
+                "px-1 py-0.2 rounded font-medium truncate max-w-[62px]",
+                isCheckInPast
+                  ? "text-content-disabled line-through"
+                  : effectiveControlling === "CHECK_IN"
+                  ? "bg-brand-50 text-brand-700 font-semibold border border-brand-200"
+                  : "text-content-tertiary"
+              )}
+              title={`Check-in: ${formatDate(checkIn)}`}
+            >
+              In {formattedCheckin}
+            </span>
+          )}
         </div>
       </div>
     );

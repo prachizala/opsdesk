@@ -138,9 +138,9 @@ export function QueueTable({
               <th className="px-3 w-[110px] hidden md:table-cell font-medium">Intent</th>
               <th className="px-3 w-[80px] font-medium">Priority</th>
               <th className="px-3 w-[76px] font-medium">Status</th>
-              <th className="px-3 w-[160px] font-medium">Dates</th>
-              <th className="px-3 w-[100px] hidden min-[1200px]:table-cell font-medium">Assignee</th>
-              {isStaff && <th className="px-3 w-[60px] text-right hidden min-[1280px]:table-cell font-medium">Score</th>}
+              <th className="px-3 w-[175px] font-medium">Dates</th>
+              <th className="px-3 w-[110px] hidden min-[1200px]:table-cell font-medium">Assignee</th>
+              {isStaff && <th className="px-3 w-[54px] text-right hidden min-[1280px]:table-cell font-medium">Score</th>}
             </tr>
           </thead>
           <tbody>
@@ -180,10 +180,10 @@ export function QueueTable({
             <th className="px-3 w-[110px] hidden md:table-cell font-medium">Intent</th>
             <th className="px-3 w-[80px] font-medium">Priority</th>
             <th className="px-3 w-[76px] font-medium">Status</th>
-            <th className="px-3 w-[160px] font-medium">Dates</th>
-            <th className="px-3 w-[100px] hidden min-[1200px]:table-cell font-medium">Assignee</th>
+            <th className="px-3 w-[175px] font-medium">Dates</th>
+            <th className="px-3 w-[110px] hidden min-[1200px]:table-cell font-medium">Assignee</th>
             {isStaff && (
-              <th className="px-3 w-[60px] text-right hidden min-[1280px]:table-cell font-medium">
+              <th className="px-3 w-[54px] text-right hidden min-[1280px]:table-cell font-medium">
                 Score
               </th>
             )}
@@ -468,8 +468,8 @@ export function QueueTable({
                     </td>
 
                     {/* 8. Dates: compact FlightPathTimeline strip + "Check-in in 2d 4h / LCD 3 Dec" */}
-                    <td className="px-3">
-                      <div className="flex flex-col justify-center text-[11px] font-mono-numbers leading-tight min-w-0">
+                    <td className="px-3 overflow-hidden">
+                      <div className="flex flex-col justify-center text-[11px] font-mono-numbers leading-tight min-w-0 w-full overflow-hidden">
                         <div className="truncate">
                           <span
                             className={cn(
@@ -497,7 +497,7 @@ export function QueueTable({
                         </div>
 
                         {/* Compact FlightPathTimeline strip */}
-                        <div className="mt-0.5">
+                        <div className="mt-0.5 w-full overflow-hidden">
                           <FlightPathTimeline
                             variant="compact"
                             checkIn={t.check_in_date}
@@ -510,7 +510,7 @@ export function QueueTable({
                     </td>
 
                     {/* 9. Assignee & Quick Actions (Hover Overlay) */}
-                    <td className="px-3 hidden min-[1200px]:table-cell relative">
+                    <td className="px-3 hidden min-[1200px]:table-cell relative overflow-hidden">
                       {/* Normal Assignee Display */}
                       <div className="flex items-center gap-1.5 min-w-0 group-hover:opacity-0 transition-opacity duration-100">
                         {t.assigned_to ? (
