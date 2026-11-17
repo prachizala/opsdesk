@@ -2,18 +2,48 @@
 
 import React from "react";
 import { useRouter } from "next/navigation";
-import { Link2, Calendar, Clock, AlertTriangle } from "lucide-react";
+import {
+  Link2,
+  Calendar,
+  Clock,
+  AlertTriangle,
+  MoreVertical,
+  UserPlus,
+  ArrowUpCircle,
+  Copy,
+  ExternalLink,
+} from "lucide-react";
 import { TicketSummary } from "@/lib/types";
-import { SlaBadge, PriorityChip, StatusChip, Chip, Avatar } from "@/components/ui";
+import {
+  SlaBadge,
+  SlaRing,
+  PriorityMark,
+  StatusChip,
+  Chip,
+  Avatar,
+  Popover,
+} from "@/components/ui";
+import { useUser } from "@/context/UserContext";
+import { useToast } from "@/context/ToastContext";
+import { assignTicket, escalateTicket } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export interface MobileTicketCardProps {
   ticket: TicketSummary;
   rank: number;
+  onRefresh?: () => void;
+  onSelectTicket?: (ticketId: string) => void;
 }
 
-export function MobileTicketCard({ ticket, rank }: MobileTicketCardProps) {
+export function MobileTicketCard({
+  ticket,
+  rank,
+  onRefresh,
+  onSelectTicket,
+}: MobileTicketCardProps) {
   const router = useRouter();
+  const { currentUser } = useUser();
+  const { showToast } = useToast();
 
   const now = Date.now();
   const checkInTime = new Date(ticket.check_in_date).getTime();
@@ -49,31 +79,68 @@ export function MobileTicketCard({ ticket, rank }: MobileTicketCardProps) {
     checkInText = "In < 1h";
   }
 
-  const linkedCount =
-    (ticket as unknown as { linked_ticket_ids?: string[] }).linked_ticket_ids?.length || 0;
+  const linkedList: string[] =
+    (ticket as unknown as { linked_ticket_ids?: string[] }).linked_ticket_ids || [];
+  const linkedCount = linkedList.length;
+
+  const handleAssignToMe = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await assignTicket(ticket.id, currentUser.id, currentUser.id);
+      showToast(`Assigned ${ticket.id} to you`, "success");
+      onRefresh?.();
+    } catch {
+      showToast("Failed to assign ticket", "error");
+    }
+  };
+
+  const handleEscalate = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await escalateTicket(ticket.id, "Operational escalation from mobile card", currentUser.id);
+      showToast(`Escalated ${ticket.id}`, "warning");
+      onRefresh?.();
+    } catch {
+      showToast("Failed to escalate ticket", "error");
+    }
+  };
+
+  const handleCopyTboh = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(ticket.tboh_id);
+    showToast(`Copied ${ticket.tboh_id} to clipboard`, "info");
+  };
+
+  const handleCardClick = () => {
+    if (onSelectTicket) {
+      onSelectTicket(ticket.id);
+    } else {
+      router.push(`/ticket/${ticket.id}`);
+    }
+  };
 
   return (
     <div
-      onClick={() => router.push(`/ticket/${ticket.id}`)}
+      onClick={handleCardClick}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          router.push(`/ticket/${ticket.id}`);
+          handleCardClick();
         }
       }}
       tabIndex={0}
       role="link"
       aria-label={`View ticket ${ticket.id} - ${ticket.title}`}
       className={cn(
-        "p-4 hover:bg-surface-subtle transition-subtle cursor-pointer flex flex-col gap-2.5 border-l-4 focus:outline-none focus:bg-surface-subtle",
+        "p-4 hover:bg-surface-subtle transition-subtle cursor-pointer flex flex-col gap-2.5 border-l-4 focus:outline-none focus:bg-surface-subtle select-none",
         slaBorderColor,
         isClosedOrStopped && "opacity-60 text-content-tertiary"
       )}
     >
-      {/* Top row: ID + TBOH + SLA Badge */}
+      {/* Top row: ID + TBOH + SLA Badge + "..." Quick Actions Menu */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="font-mono-numbers text-caption font-semibold text-content-primary">
+          <span className="font-mono-numbers text-caption font-bold text-content-primary">
             #{rank} {ticket.id}
           </span>
           <span className="font-mono-numbers text-[11px] text-content-tertiary truncate">
@@ -87,14 +154,68 @@ export function MobileTicketCard({ ticket, rank }: MobileTicketCardProps) {
           )}
         </div>
 
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           {isRank1Emergency && (
-            <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded leading-none shrink-0 animate-pulse">
+            <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-1 py-0.2 rounded leading-none shrink-0 animate-pulse">
               <AlertTriangle className="w-2.5 h-2.5 text-rose-600 shrink-0" />
               &lt; 4h
             </span>
           )}
-          <SlaBadge sla={ticket.sla} size="sm" showRing isEscalated={ticket.status === "Escalated"} />
+          <SlaRing status={ticket.sla.status} hoursRemaining={ticket.sla.hours_remaining} size={16} />
+          <SlaBadge sla={ticket.sla} size="sm" isEscalated={ticket.status === "Escalated"} />
+
+          {/* Mobile "..." Quick Actions Popover Menu */}
+          <div onClick={(e) => e.stopPropagation()}>
+            <Popover
+              position="bottom-right"
+              trigger={
+                <button
+                  type="button"
+                  className="p-1 rounded text-content-tertiary hover:text-content-primary hover:bg-surface-subtle"
+                  aria-label="Ticket options"
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </button>
+              }
+            >
+              <div className="flex flex-col gap-1 w-40 text-caption font-sans">
+                {!ticket.assigned_to && (
+                  <button
+                    type="button"
+                    onClick={handleAssignToMe}
+                    className="flex items-center gap-2 px-2.5 py-1.5 rounded hover:bg-surface-subtle text-left text-content-primary transition-colors cursor-pointer"
+                  >
+                    <UserPlus className="w-3.5 h-3.5 text-brand-600" />
+                    <span>Assign to me</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleEscalate}
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded hover:bg-surface-subtle text-left text-amber-700 transition-colors cursor-pointer"
+                >
+                  <ArrowUpCircle className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Escalate</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyTboh}
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded hover:bg-surface-subtle text-left text-content-secondary transition-colors cursor-pointer"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copy TBOH</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/ticket/${ticket.id}`)}
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded hover:bg-surface-subtle text-left text-brand-700 font-medium transition-colors cursor-pointer border-t border-border mt-0.5 pt-1.5"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Open full page</span>
+                </button>
+              </div>
+            </Popover>
+          </div>
         </div>
       </div>
 
@@ -105,7 +226,7 @@ export function MobileTicketCard({ ticket, rank }: MobileTicketCardProps) {
 
       {/* Chips row */}
       <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-        <PriorityChip priority={ticket.priority} />
+        <PriorityMark priority={ticket.priority} />
         <StatusChip status={ticket.status} />
         {ticket.intent && (
           <Chip size="sm" variant="brand">
@@ -117,7 +238,7 @@ export function MobileTicketCard({ ticket, rank }: MobileTicketCardProps) {
       {/* Bottom row: Deadlines and Assignee */}
       <div className="flex items-center justify-between text-caption text-content-secondary pt-2 border-t border-border/60">
         <div className="flex items-center gap-2 font-mono-numbers text-[11px]">
-          <span className="inline-flex items-center gap-1">
+          <span className="inline-flex items-center gap-1 font-semibold text-content-primary">
             <Calendar className="w-3 h-3 text-content-tertiary" />
             {checkInText}
           </span>

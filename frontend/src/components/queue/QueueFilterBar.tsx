@@ -70,19 +70,20 @@ export function QueueFilterBar({
   return (
     <div
       className={cn(
-        "bg-surface border border-border rounded-card p-3 shadow-xs flex flex-col gap-2.5",
+        "bg-surface border border-border rounded-card p-2.5 shadow-xs flex flex-col gap-2 select-none",
         className
       )}
     >
-      {/* Primary compact filter row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5 items-center">
-        {/* Search */}
+      {/* Primary compact 36px filter row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2 items-center">
+        {/* Search Input: compact 36px */}
         <div className="lg:col-span-4">
           <Input
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search TBOH, TCK-ID, keyword..."
-            leftIcon={<Search className="w-4 h-4 text-content-tertiary" />}
+            leftIcon={<Search className="w-3.5 h-3.5 text-content-tertiary" />}
+            className="h-9 text-[13px]"
             rightIcon={
               searchQuery ? (
                 <button
@@ -91,47 +92,50 @@ export function QueueFilterBar({
                   className="cursor-pointer text-content-tertiary hover:text-content-primary p-0.5"
                   aria-label="Clear search"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-3 h-3" />
                 </button>
               ) : undefined
             }
           />
         </div>
 
-        {/* Intent */}
+        {/* Intent Select: compact 36px */}
         <div className="lg:col-span-3">
           <Select
             value={intentFilter}
             onChange={(e) => onIntentChange(e.target.value)}
             options={intentOptions}
+            className="h-9 text-[13px]"
           />
         </div>
 
-        {/* Priority */}
+        {/* Priority Select: compact 36px */}
         <div className="lg:col-span-2">
           <Select
             value={priorityFilter}
             onChange={(e) => onPriorityChange(e.target.value)}
             options={priorityOptions}
+            className="h-9 text-[13px]"
           />
         </div>
 
-        {/* Status */}
+        {/* Status Select: compact 36px */}
         <div className="lg:col-span-2">
           <Select
             value={statusFilter}
             onChange={(e) => onStatusChange(e.target.value)}
             options={statusOptions}
+            className="h-9 text-[13px]"
           />
         </div>
 
-        {/* At Risk / Breached Toggle */}
+        {/* At Risk / Breached Toggle: compact 36px */}
         <div className="lg:col-span-1 flex justify-end">
           <button
             type="button"
             onClick={onToggleAtRisk}
             className={cn(
-              "h-9 px-2.5 rounded-input text-[12px] font-medium border flex items-center justify-center gap-1.5 transition-subtle cursor-pointer select-none whitespace-nowrap w-full",
+              "h-9 px-2 rounded-input text-[12px] font-medium border flex items-center justify-center gap-1.5 transition-subtle cursor-pointer select-none whitespace-nowrap w-full",
               atRiskOnly
                 ? "bg-amber-100 text-amber-900 border-amber-300 font-semibold shadow-xs"
                 : "bg-surface text-content-secondary border-border hover:border-border-strong hover:bg-surface-subtle"
@@ -150,11 +154,11 @@ export function QueueFilterBar({
 
       {/* Active filter chips & Clear filters link */}
       {hasActiveFilters && (
-        <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-border text-caption">
+        <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-border/60 text-caption">
           <span className="text-content-tertiary text-[11px] font-medium mr-1">Active:</span>
 
           {debouncedSearch && (
-            <Chip size="sm" variant="brand">
+            <Chip size="sm" variant="brand" className="h-6 text-[11px]">
               Search: &quot;{debouncedSearch}&quot;
               <button
                 type="button"
@@ -168,7 +172,7 @@ export function QueueFilterBar({
           )}
 
           {intentFilter && (
-            <Chip size="sm" variant="default">
+            <Chip size="sm" variant="default" className="h-6 text-[11px]">
               Intent: {intentFilter}
               <button
                 type="button"
@@ -182,7 +186,7 @@ export function QueueFilterBar({
           )}
 
           {priorityFilter && (
-            <Chip size="sm" variant="default">
+            <Chip size="sm" variant="default" className="h-6 text-[11px]">
               Priority: {priorityFilter}
               <button
                 type="button"
@@ -196,7 +200,7 @@ export function QueueFilterBar({
           )}
 
           {statusFilter && (
-            <Chip size="sm" variant="default">
+            <Chip size="sm" variant="default" className="h-6 text-[11px]">
               Status: {statusFilter}
               <button
                 type="button"
@@ -210,7 +214,11 @@ export function QueueFilterBar({
           )}
 
           {atRiskOnly && (
-            <Chip size="sm" variant="default" className="bg-amber-50 text-amber-900 border-amber-200">
+            <Chip
+              size="sm"
+              variant="default"
+              className="h-6 text-[11px] bg-amber-50 text-amber-900 border-amber-200"
+            >
               At risk / Breached
               <button
                 type="button"

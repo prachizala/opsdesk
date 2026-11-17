@@ -12,10 +12,13 @@ import {
   QueueTabs,
   QueueFilterBar,
   QueueTable,
+  QueueCardsView,
   QueuePagination,
   CreateTicketModal,
   MobileFilterSheet,
   MobileTicketCard,
+  DepartureBoardStrip,
+  QueuePreviewDrawer,
 } from "@/components/queue";
 
 export default function QueuePage() {
@@ -24,6 +27,7 @@ export default function QueuePage() {
 
   // Navigation & Data state
   const [activeTab, setActiveTab] = useState<string>("triage");
+  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   const [tickets, setTickets] = useState<TicketSummary[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
@@ -38,7 +42,13 @@ export default function QueuePage() {
   const [priorityFilter, setPriorityFilter] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [atRiskOnly, setAtRiskOnly] = useState<boolean>(false);
+  const [unassignedOnly, setUnassignedOnly] = useState<boolean>(false);
+  const [healthBarFilter, setHealthBarFilter] = useState<string>("ALL");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState<boolean>(false);
+
+  // Split-View Preview Drawer state
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
 
   // Export & Modal state
   const [isExporting, setIsExporting] = useState<boolean>(false);
@@ -94,6 +104,11 @@ export default function QueuePage() {
         );
       }
 
+      // Client-side Unassigned filter toggle
+      if (unassignedOnly) {
+        fetchedTickets = fetchedTickets.filter((t) => !t.assigned_to);
+      }
+
       setTickets(fetchedTickets);
       setTotalCount(res.total || 0);
     } catch (err: unknown) {
@@ -111,6 +126,7 @@ export default function QueuePage() {
     priorityFilter,
     statusFilter,
     atRiskOnly,
+    unassignedOnly,
   ]);
 
   useEffect(() => {
@@ -125,7 +141,8 @@ export default function QueuePage() {
     Boolean(intentFilter) ||
     Boolean(priorityFilter) ||
     Boolean(statusFilter) ||
-    atRiskOnly;
+    atRiskOnly ||
+    unassignedOnly;
 
   const handleClearFilters = () => {
     setSearchQuery("");
@@ -134,7 +151,38 @@ export default function QueuePage() {
     setPriorityFilter("");
     setStatusFilter("");
     setAtRiskOnly(false);
+    setUnassignedOnly(false);
+    setHealthBarFilter("ALL");
     setPage(0);
+  };
+
+  // HealthBar filter handler
+  const handleHealthBarFilter = (
+    type: "ALL" | "OPEN" | "AT_RISK" | "BREACHED" | "UNASSIGNED"
+  ) => {
+    setHealthBarFilter(type);
+    setPage(0);
+    if (type === "ALL") {
+      setAtRiskOnly(false);
+      setUnassignedOnly(false);
+      setStatusFilter("");
+    } else if (type === "AT_RISK") {
+      setAtRiskOnly(true);
+      setUnassignedOnly(false);
+      setStatusFilter("");
+    } else if (type === "BREACHED") {
+      setAtRiskOnly(true);
+      setUnassignedOnly(false);
+      setStatusFilter("");
+    } else if (type === "UNASSIGNED") {
+      setUnassignedOnly(true);
+      setAtRiskOnly(false);
+      setStatusFilter("");
+    } else if (type === "OPEN") {
+      setAtRiskOnly(false);
+      setUnassignedOnly(false);
+      setStatusFilter("Open");
+    }
   };
 
   // CSV Export Handler
@@ -169,21 +217,56 @@ export default function QueuePage() {
     }
   };
 
+  // Split-View Drawer Selection & Keyboard Navigation (J/K)
+  const handleSelectTicket = (ticketId: string) => {
+    setSelectedTicketId(ticketId);
+    setIsDrawerOpen(true);
+  };
+
+  const handleNextTicket = () => {
+    if (!selectedTicketId || tickets.length === 0) return;
+    const currentIndex = tickets.findIndex((t) => t.id === selectedTicketId);
+    if (currentIndex < tickets.length - 1) {
+      setSelectedTicketId(tickets[currentIndex + 1].id);
+    }
+  };
+
+  const handlePrevTicket = () => {
+    if (!selectedTicketId || tickets.length === 0) return;
+    const currentIndex = tickets.findIndex((t) => t.id === selectedTicketId);
+    if (currentIndex > 0) {
+      setSelectedTicketId(tickets[currentIndex - 1].id);
+    }
+  };
+
+  const firstTicketId = tickets.length > 0 ? tickets[0].id : null;
+
   return (
     <div className="flex flex-col gap-5">
-      {/* 1. Header */}
+      {/* 1. Header: Operations Queue + "Work next" + "Export CSV" + "New ticket" */}
       <QueueHeader
         totalCount={totalCount}
+        firstTicketId={firstTicketId}
         isStaff={isStaff}
         isExporting={isExporting}
         onExport={handleExportCsv}
         onCreateOpen={() => setIsCreateOpen(true)}
       />
 
-      {/* 2. KPI Strip (Computed only from loaded tickets) */}
-      <QueueKpiStrip tickets={tickets} />
+      {/* 2. Signature Departure Board Strip (top 5 most urgent check-ins) */}
+      <DepartureBoardStrip
+        tickets={tickets}
+        onSelectTicket={handleSelectTicket}
+      />
 
-      {/* 3. View Tabs */}
+      {/* 3. HealthBar Strip (replaces old KPI cards with stacked SLA split + CountUp) */}
+      <QueueKpiStrip
+        tickets={tickets}
+        activeFilter={healthBarFilter}
+        onFilterClick={handleHealthBarFilter}
+      />
+
+      {/* 4. View Tabs & View Mode Toggle (Table | Cards) */}
       <QueueTabs
         activeTab={activeTab}
         onTabChange={(tabId) => {
@@ -192,11 +275,13 @@ export default function QueuePage() {
         }}
         isRequester={isRequester}
         totalCount={totalCount}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
         hasActiveFilters={hasActiveFilters}
         onToggleMobileFilters={() => setMobileFiltersOpen((prev) => !prev)}
       />
 
-      {/* 4. Filter Bar (Desktop) */}
+      {/* 5. Filter Bar (Desktop) - compact 36px row with removable chips */}
       <QueueFilterBar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -226,7 +311,7 @@ export default function QueuePage() {
         className="hidden sm:flex"
       />
 
-      {/* 5. Main Table & Mobile View Container */}
+      {/* 6. Main Content Area (Table or Cards) */}
       <div className="bg-surface border border-border rounded-card shadow-xs overflow-hidden">
         {error ? (
           <div className="p-6">
@@ -246,29 +331,51 @@ export default function QueuePage() {
           />
         ) : (
           <>
-            {/* Desktop Table: Fits cleanly at 1280px+ with ZERO horizontal scrollbar */}
+            {/* Desktop Table View (Fits 1280px with NO horizontal scrollbar) */}
             <div className="hidden md:block">
-              <QueueTable
-                tickets={tickets}
-                loading={loading}
-                page={page}
-                pageSize={pageSize}
-                isStaff={isStaff}
-              />
+              {viewMode === "table" ? (
+                <QueueTable
+                  tickets={tickets}
+                  loading={loading}
+                  page={page}
+                  pageSize={pageSize}
+                  isStaff={isStaff}
+                  selectedTicketId={selectedTicketId}
+                  onSelectTicket={handleSelectTicket}
+                  onIntentFilter={(intent) => {
+                    setIntentFilter(intent);
+                    setPage(0);
+                  }}
+                  onPriorityFilter={(priority) => {
+                    setPriorityFilter(priority);
+                    setPage(0);
+                  }}
+                  onRefresh={loadData}
+                />
+              ) : (
+                <QueueCardsView
+                  tickets={tickets}
+                  selectedTicketId={selectedTicketId}
+                  onSelectTicket={handleSelectTicket}
+                  onRefresh={loadData}
+                />
+              )}
             </div>
 
-            {/* Mobile View (< 768px): Stacked cards */}
+            {/* Mobile View (< 768px): Stacked cards with "..." quick actions */}
             <div className="block md:hidden divide-y divide-border">
               {tickets.map((t, idx) => (
                 <MobileTicketCard
                   key={t.id}
                   ticket={t}
                   rank={page * pageSize + idx + 1}
+                  onRefresh={loadData}
+                  onSelectTicket={handleSelectTicket}
                 />
               ))}
             </div>
 
-            {/* 6. Pagination Footer */}
+            {/* 7. Pagination Footer */}
             <QueuePagination
               page={page}
               pageSize={pageSize}
@@ -280,7 +387,17 @@ export default function QueuePage() {
         )}
       </div>
 
-      {/* 7. Mobile Filter Bottom Sheet */}
+      {/* 8. Split View Preview Panel (Drawer loading ticket via fetchTicketDetail) */}
+      <QueuePreviewDrawer
+        ticketId={selectedTicketId}
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        onNextTicket={handleNextTicket}
+        onPrevTicket={handlePrevTicket}
+        onRefresh={loadData}
+      />
+
+      {/* 9. Mobile Filter Bottom Sheet */}
       <MobileFilterSheet
         isOpen={mobileFiltersOpen}
         onClose={() => setMobileFiltersOpen(false)}
@@ -310,7 +427,7 @@ export default function QueuePage() {
         onClearFilters={handleClearFilters}
       />
 
-      {/* 8. Create Ticket Modal */}
+      {/* 10. Create Ticket Modal (640px) */}
       <CreateTicketModal
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
