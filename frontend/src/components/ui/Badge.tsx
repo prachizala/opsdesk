@@ -99,6 +99,65 @@ export function StatusChip({ status, className }: StatusChipProps) {
   );
 }
 
+export interface RegionTagProps {
+  region: "MEA" | "APAC" | "EU" | "AMER" | string;
+  className?: string;
+}
+
+export function RegionTag({ region, className }: RegionTagProps) {
+  const normalized = region.toUpperCase();
+  const styles: Record<string, string> = {
+    MEA: "bg-region-mea-bg text-region-mea-text",
+    APAC: "bg-region-apac-bg text-region-apac-text",
+    EU: "bg-region-eu-bg text-region-eu-text",
+    AMER: "bg-region-amer-bg text-region-amer-text",
+  };
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center h-[22px] px-2 rounded-chip text-[12px] font-semibold font-mono-numbers leading-none shrink-0 select-none tracking-wide",
+        styles[normalized] || "bg-surface-subtle text-content-secondary",
+        className
+      )}
+    >
+      {normalized}
+    </span>
+  );
+}
+
+export interface PriorityMarkProps {
+  priority: "Urgent" | "High" | "Medium" | "Low" | string;
+  className?: string;
+  showLabel?: boolean;
+}
+
+export function PriorityMark({ priority, className, showLabel = true }: PriorityMarkProps) {
+  // Neutral-to-warm tones (never loud red, red is reserved for Breached)
+  const configs: Record<string, { dot: string; bg: string; text: string }> = {
+    Urgent: { dot: "bg-amber-600", bg: "bg-amber-50", text: "text-amber-800" },
+    High: { dot: "bg-orange-500", bg: "bg-orange-50", text: "text-orange-800" },
+    Medium: { dot: "bg-blue-500", bg: "bg-blue-50", text: "text-blue-800" },
+    Low: { dot: "bg-slate-400", bg: "bg-slate-100", text: "text-slate-700" },
+  };
+
+  const current = configs[priority] || configs.Low;
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 h-[22px] px-2 rounded-chip text-[12px] font-medium leading-none shrink-0 select-none",
+        current.bg,
+        current.text,
+        className
+      )}
+    >
+      <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", current.dot)} />
+      {showLabel && <span>{priority}</span>}
+    </span>
+  );
+}
+
 // Aliases for backward compatibility
 export const Badge = Chip;
 export const PriorityBadge = PriorityChip;

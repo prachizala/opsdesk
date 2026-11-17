@@ -27,6 +27,21 @@ export function Tabs({
   ariaLabel = "Navigation tabs",
   variant = "underline",
 }: TabsProps) {
+  const tabRefs = React.useRef<(HTMLButtonElement | null)[]>([]);
+  const [indicator, setIndicator] = React.useState<{ left: number; width: number }>({ left: 0, width: 0 });
+
+  React.useEffect(() => {
+    if (variant !== "underline") return;
+    const activeIndex = tabs.findIndex((t) => t.id === activeTab);
+    const activeEl = tabRefs.current[activeIndex];
+    if (activeEl) {
+      setIndicator({
+        left: activeEl.offsetLeft,
+        width: activeEl.offsetWidth,
+      });
+    }
+  }, [activeTab, tabs, variant]);
+
   const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
     if (e.key === "ArrowRight") {
       e.preventDefault();
@@ -87,13 +102,13 @@ export function Tabs({
     );
   }
 
-  // Underline style (OpsDesk default)
+  // Underline style with gliding active indicator (OpsDesk default)
   return (
     <div
       role="tablist"
       aria-label={ariaLabel}
       className={cn(
-        "flex items-center gap-6 border-b border-border w-full overflow-x-auto select-none",
+        "relative flex items-center gap-6 border-b border-border w-full overflow-x-auto select-none",
         className
       )}
     >
@@ -102,6 +117,7 @@ export function Tabs({
         return (
           <button
             key={tab.id}
+            ref={(el) => { tabRefs.current[idx] = el; }}
             role="tab"
             aria-selected={isActive}
             tabIndex={isActive ? 0 : -1}
@@ -110,7 +126,7 @@ export function Tabs({
             className={cn(
               "flex items-center gap-2 pb-2.5 pt-1 text-table font-medium transition-subtle shrink-0 cursor-pointer border-b-2 -mb-px focus-visible:outline-none",
               isActive
-                ? "border-brand-500 text-brand-700 font-semibold"
+                ? "border-transparent text-brand-700 font-semibold"
                 : "border-transparent text-content-secondary hover:text-content-primary hover:border-border-strong"
             )}
           >
@@ -131,6 +147,17 @@ export function Tabs({
           </button>
         );
       })}
+      {/* Gliding active underline indicator */}
+      {indicator.width > 0 && (
+        <span
+          className="absolute bottom-0 h-0.5 bg-brand-500 rounded-full transition-all duration-180 ease-out pointer-events-none"
+          style={{
+            left: `${indicator.left}px`,
+            width: `${indicator.width}px`,
+          }}
+          aria-hidden="true"
+        />
+      )}
     </div>
   );
 }
