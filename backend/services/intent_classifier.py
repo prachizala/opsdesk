@@ -82,7 +82,22 @@ def suggest_ticket_intent(subject: str, body: str) -> Tuple[str, str]:
         from google import genai
         from google.genai import types
 
-        client = genai.Client(api_key=api_key)
+        # Pass timeout directly into SDK client HTTP options (in milliseconds)
+        timeout_ms = int(timeout_sec * 1000)
+        http_opts = None
+        if hasattr(types, "HttpOptions"):
+            try:
+                http_opts = types.HttpOptions(timeout=timeout_ms)
+            except Exception:
+                http_opts = {"timeout": timeout_ms}
+        else:
+            http_opts = {"timeout": timeout_ms}
+
+        try:
+            client = genai.Client(api_key=api_key, http_options=http_opts)
+        except Exception:
+            client = genai.Client(api_key=api_key)
+
         prompt = f"""
         Analyze this B2B travel support message and suggest the single best matching category from this taxonomy:
         {INTENT_TAXONOMY[:-1]}

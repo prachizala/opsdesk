@@ -1789,6 +1789,9 @@ def test_request_id_injected_in_response(client: TestClient):
 def test_rate_limiter_middleware_blocks_with_429(client: TestClient, monkeypatch):
     """Step 5.1: In-process rate limiter returns 429 and Retry-After when threshold exceeded."""
     from backend.app import main as main_module
+    with main_module._rate_limit_lock:
+        main_module._rate_limit_records.clear()
+
     # Temporarily set limit to 5 requests per minute for a dedicated test user
     monkeypatch.setattr(main_module, "RATE_LIMIT_PER_MINUTE", 5)
     test_user_id = f"USR-RATELIMIT-{uuid.uuid4()}"
@@ -1829,7 +1832,7 @@ def test_csv_export_concurrency_limiter_503(client: TestClient, monkeypatch):
 
 
 def test_gemini_timeout_fallback(monkeypatch):
-    """Step 5.3: Gemini call timeout falls back safely to regex or Unclassified."""
+    """Step 5.3: Gemini call timeout falls back safely to regex or Unclassified and configures http_options."""
     import time
     from backend.services.intent_classifier import suggest_ticket_intent
 
@@ -1838,9 +1841,12 @@ def test_gemini_timeout_fallback(monkeypatch):
     # Set timeout to 0.1s
     monkeypatch.setenv("GEMINI_TIMEOUT_SECONDS", "0.1")
 
+    client_init_kwargs = {}
+
     # Mock genai client to simulate a slow or hanging call
     class HangingClient:
         def __init__(self, *args, **kwargs):
+            client_init_kwargs.update(kwargs)
             self.models = self
 
         def generate_content(self, *args, **kwargs):
@@ -1862,6 +1868,123 @@ def test_gemini_timeout_fallback(monkeypatch):
     assert intent == "Unclassified"
     assert source == "fallback_unclassified"
     assert elapsed < 0.8, f"Gemini timeout took too long: {elapsed:.2f}s"
+    # Verify timeout was passed directly into SDK client http_options in milliseconds
+    assert "http_options" in client_init_kwargs
+    assert client_init_kwargs["http_options"]["timeout"] == 100
+
+
+def test_rate_limiter_dual_keying_and_bounded_eviction(client: TestClient, monkeypatch):
+    """
+    Step B.2: Rate limiter tracks both X-User-Id and client IP, and bounds memory with eviction.
+    """
+    import time
+    from backend.app import main as main_module
+    monkeypatch.setattr(main_module, "RATE_LIMIT_PER_MINUTE", 3)
+    monkeypatch.setattr(main_module, "RATE_LIMIT_MAX_KEYS", 10)
+
+    with main_module._rate_limit_lock:
+        main_module._rate_limit_records.clear()
+
+    # 1. Rotating X-User-Id from same client IP must be blocked when IP limit (3) is exceeded
+    for i in range(3):
+        rotating_user = f"USR-ROTATING-{i}-{uuid.uuid4()}"
+        resp = client.get("/api/tickets?view=triage", headers={"X-User-Id": rotating_user})
+        assert resp.status_code != 429, f"Unexpected 429 on request {i}"
+
+    # 4th request with a new user ID from the same IP must be throttled
+    resp_blocked = client.get("/api/tickets?view=triage", headers={"X-User-Id": f"USR-ROTATING-4-{uuid.uuid4()}"})
+    assert resp_blocked.status_code == 429
+    assert resp_blocked.headers.get("retry-after") == "60" or resp_blocked.headers.get("Retry-After") == "60"
+
+    # 2. Bounded dict eviction: add 15 synthetic keys, next request must evict down to <= RATE_LIMIT_MAX_KEYS
+    with main_module._rate_limit_lock:
+        main_module._rate_limit_records.clear()
+        now = time.time()
+        for k in range(15):
+            main_module._rate_limit_records[f"synthetic-key-{k}"] = [now - 100.0]  # stale timestamps
+
+    # Make request
+    client.get("/api/tickets?view=triage", headers={"X-User-Id": f"USR-BOUNDED-{uuid.uuid4()}"})
+    with main_module._rate_limit_lock:
+        assert len(main_module._rate_limit_records) <= 10
+
+
+def test_csv_export_max_duration_and_generator_release(client: TestClient, monkeypatch):
+    """
+    Step B.3: CSV export enforces max duration limit and releases semaphore on completion/exit.
+    """
+    from backend.app import main as main_module
+
+    # 1. Abort line emitted when max duration exceeded
+    monkeypatch.setattr(main_module, "CSV_EXPORT_MAX_DURATION_SECONDS", -1.0)  # immediately expired
+    resp = client.get("/api/export/tickets.csv", headers={"X-User-Id": "USR-104"})
+    assert resp.status_code == 200
+    assert "# [ABORTED: Export exceeded maximum duration limit]" in resp.text
+
+    # 2. Semaphore release in finally block
+    monkeypatch.setattr(main_module, "CSV_EXPORT_MAX_DURATION_SECONDS", 30.0)
+    # Ensure all slots are available
+    acquired_all = []
+    while main_module._export_semaphore.acquire(blocking=False):
+        acquired_all.append(True)
+    assert len(acquired_all) == main_module.CSV_EXPORT_MAX_CONCURRENCY
+    for _ in acquired_all:
+        main_module._export_semaphore.release()
+
+
+def test_idempotent_ticket_creation_payload_mismatch_409(client: TestClient, db_session: Session):
+    """
+    Step B.5: Idempotency-Key reuse with different request payload returns HTTP 409 Conflict.
+    """
+    now = datetime.utcnow()
+    idem_key = f"idem-key-conflict-{uuid.uuid4()}"
+    payload_a = {
+        "agency_id": "AGY-001",
+        "tboh_id": "TBOH-IDEM-CONF-1",
+        "title": "Payload A Title",
+        "description": "Original flight request",
+        "priority": "High",
+        "check_in_date": (now + timedelta(days=3)).isoformat(),
+        "lcd_date": (now + timedelta(hours=12)).isoformat(),
+        "first_message": "Original message"
+    }
+    payload_b = {
+        "agency_id": "AGY-001",
+        "tboh_id": "TBOH-IDEM-CONF-2",
+        "title": "Payload B Different Title",
+        "description": "Tampered or different request with same key",
+        "priority": "Low",
+        "check_in_date": (now + timedelta(days=5)).isoformat(),
+        "lcd_date": (now + timedelta(hours=24)).isoformat(),
+        "first_message": "Different message"
+    }
+
+    # 1. First request with payload_a succeeds
+    resp1 = client.post(
+        "/api/tickets",
+        json=payload_a,
+        headers={"X-User-Id": "USR-201", "Idempotency-Key": idem_key}
+    )
+    assert resp1.status_code == 201
+    ticket_id = resp1.json()["id"]
+
+    # 2. Second request with identical payload_a succeeds and returns cached ticket
+    resp2 = client.post(
+        "/api/tickets",
+        json=payload_a,
+        headers={"X-User-Id": "USR-201", "Idempotency-Key": idem_key}
+    )
+    assert resp2.status_code == 201
+    assert resp2.json()["id"] == ticket_id
+
+    # 3. Third request with different payload_b but SAME Idempotency-Key returns 409 Conflict
+    resp3 = client.post(
+        "/api/tickets",
+        json=payload_b,
+        headers={"X-User-Id": "USR-201", "Idempotency-Key": idem_key}
+    )
+    assert resp3.status_code == 409
+    assert "Conflict: Idempotency-Key was already used with a different request payload." in resp3.json()["detail"]
 
 
 
