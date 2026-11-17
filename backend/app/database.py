@@ -64,6 +64,18 @@ def ensure_schema_migrations(engine_obj):
                 if cols_idem and "request_hash" not in cols_idem:
                     conn.execute(text("ALTER TABLE idempotency_records ADD COLUMN request_hash VARCHAR(64)"))
                     conn.commit()
+
+                res_outbox = conn.execute(text("PRAGMA table_info(events_outbox)")).fetchall()
+                cols_outbox = [r[1] for r in res_outbox]
+                if cols_outbox and "status" not in cols_outbox:
+                    conn.execute(text("ALTER TABLE events_outbox ADD COLUMN status VARCHAR(20) DEFAULT 'pending' NOT NULL"))
+                    conn.commit()
+                if cols_outbox and "retry_count" not in cols_outbox:
+                    conn.execute(text("ALTER TABLE events_outbox ADD COLUMN retry_count INTEGER DEFAULT 0 NOT NULL"))
+                    conn.commit()
+                if cols_outbox and "last_error" not in cols_outbox:
+                    conn.execute(text("ALTER TABLE events_outbox ADD COLUMN last_error TEXT"))
+                    conn.commit()
         except Exception:
             pass
 
