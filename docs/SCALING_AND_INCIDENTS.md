@@ -84,7 +84,7 @@ Measured on Windows 11 development machine (Python 3.11, Uvicorn single worker, 
 
 | Architecture Component | Status | Verification Mechanism |
 | :--- | :--- | :--- |
-| **Next.js CVE-2025-66478 Patch** | **VERIFIED** | Upgraded to Next.js 15.5.29; `npm audit` shows 0 critical vulnerabilities. `npm run build` succeeds cleanly. |
+| **Next.js & React Security Patches** | **VERIFIED** | Upgraded to Next.js 15.5.29 (patched floor: >= 15.1.4 for CVE-2025-66478 / GHSA-9qr9-h5gf-34mp) and React/React-DOM 19.0.1 (patched floor: >= 19.0.1); `npm audit` shows 0 critical vulnerabilities. `npm run build` succeeds cleanly. |
 | **CSV Formula Injection Sanitization** | **VERIFIED** | Automated test `test_export_csv_formula_injection_escaping` verifies leading `=`, `+`, `-`, `@`, `\t`, `\r` are prefixed with `'`. |
 | **SQLite WAL Mode & Lock Prevention** | **VERIFIED** | Automated test `test_sqlite_concurrent_writes_wal_prevents_database_is_locked` verifies 0 lock errors under 8-thread write burst. |
 | **Atomic Claim & 409 Race Protection** | **VERIFIED** | Automated test `test_concurrent_ticket_assign_race_and_optimistic_control` verifies atomic update and versioning. |
