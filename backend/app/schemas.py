@@ -41,6 +41,9 @@ def normalize_utc_datetime(v: Any) -> datetime:
         raise ValueError("Invalid datetime value")
     if dt.tzinfo is not None:
         dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    else:
+        # Naive datetime/string: treat as UTC directly, never call astimezone() which assumes host local timezone
+        dt = dt.replace(tzinfo=timezone.utc).replace(tzinfo=None)
     return dt
 
 class TicketCreateSchema(BaseModel):
@@ -65,13 +68,16 @@ class TicketAssignSchema(BaseModel):
 
 class TicketStatusUpdateSchema(BaseModel):
     status: VALID_TICKET_STATUSES
+    version: Optional[int] = Field(None, description="Expected ticket version for optimistic concurrency control")
 
 class TicketEscalateSchema(BaseModel):
     reason: str = Field(..., min_length=1, max_length=1000)
+    version: Optional[int] = Field(None, description="Expected ticket version for optimistic concurrency control")
 
 class TicketTransferSchema(BaseModel):
     target_agent_id: str = Field(..., min_length=1, max_length=100)
     reason: str = Field(..., min_length=1, max_length=1000)
+    version: Optional[int] = Field(None, description="Expected ticket version for optimistic concurrency control")
 
 class TicketLinkSuggestionSchema(BaseModel):
     bug_link: str = Field(..., min_length=3, max_length=200)
