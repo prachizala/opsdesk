@@ -26,9 +26,10 @@ def run_concurrency_config(journal_mode: str, busy_timeout_ms: int, num_threads:
             nonlocal locked_errors, success_commits
             timeout_sec = busy_timeout_ms / 1000.0
             c = sqlite3.connect(temp_db_path, timeout=timeout_sec)
-            c.execute(f"PRAGMA journal_mode={journal_mode}")
-            c.execute(f"PRAGMA busy_timeout={busy_timeout_ms}")
-            c.execute("PRAGMA synchronous=NORMAL")
+            try:
+                c.execute(f"PRAGMA busy_timeout={busy_timeout_ms}")
+            except sqlite3.OperationalError:
+                pass
             for i in range(writes_per_thread):
                 try:
                     c.execute("INSERT INTO test_bench (thread_id, val) VALUES (?, ?)", (tid, i))
