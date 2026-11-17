@@ -58,6 +58,12 @@ def ensure_schema_migrations(engine_obj):
                 if cols and "version" not in cols:
                     conn.execute(text("ALTER TABLE tickets ADD COLUMN version INTEGER DEFAULT 1 NOT NULL"))
                     conn.commit()
+
+                res_idem = conn.execute(text("PRAGMA table_info(idempotency_records)")).fetchall()
+                cols_idem = [r[1] for r in res_idem]
+                if cols_idem and "request_hash" not in cols_idem:
+                    conn.execute(text("ALTER TABLE idempotency_records ADD COLUMN request_hash VARCHAR(64)"))
+                    conn.commit()
         except Exception:
             pass
 

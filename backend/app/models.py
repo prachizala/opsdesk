@@ -173,5 +173,6 @@ class IdempotencyRecord(Base):
     user_id = Column(String(50), nullable=False, index=True)
     key = Column(String(100), nullable=False, index=True)
     ticket_id = Column(String(50), nullable=False)
+    request_hash = Column(String(64), nullable=True)  # SHA-256 hex digest of payload for conflict detection
     response_json = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)

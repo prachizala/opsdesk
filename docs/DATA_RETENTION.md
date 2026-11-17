@@ -13,9 +13,9 @@ Source: *Zendesk-Darwin box Automation.pdf*, Page 6:
 
 | Tier | Lifecycle Window | Storage Medium | Operational SLA | Accessibility |
 |---|---|---|---|---|
-| **Hot Storage** | Active & Open tickets, and Closed tickets <= 90 days | Primary PostgreSQL / SQLite (Indexed) | < 50ms query latency | Full interactive UI, queue routing, real-time search |
-| **Warm Storage** | Closed & Resolved cases between 91 days and 365 days | Primary database (partitioned table) | < 200ms query latency | Read-only search, audit lookups, ops export |
-| **Cold Archival** | Cases older than 365 days (1 year) | Compressed parquet / object storage (S3/GCS) | Minutes (batch export) | Lead ops data dumps, compliance audit retrieval |
+| **Hot Storage** | Active & Open tickets, and Closed tickets <= 90 days | Primary PostgreSQL / SQLite (Indexed) | Design target: < 50ms query latency | Full interactive UI, queue routing, real-time search |
+| **Warm Storage** | Closed & Resolved cases between 91 days and 365 days | Primary database (partitioned table) | Design target: < 200ms query latency | Read-only search, audit lookups, ops export |
+| **Cold Archival** | Cases older than 365 days (1 year) | Compressed parquet / object storage (S3/GCS) | Batch export (minutes) | Lead ops data dumps, compliance audit retrieval |
 
 ---
 
@@ -25,7 +25,7 @@ Source: *Zendesk-Darwin box Automation.pdf*, Page 6:
 - Architecture:
   - Backed by SQLAlchemy cursor chunking (`yield_per(500)`).
   - FastAPI `StreamingResponse` pushes bytes incrementally over HTTP.
-  - Zero server memory buffering, enabling full multi-thousand record exports with predictable $O(1)$ memory consumption.
+  - Zero server memory buffering, enabling full multi-thousand record exports with predictable O(1) memory consumption.
 
 ---
 
