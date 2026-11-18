@@ -174,14 +174,14 @@ export function QueueTable({
         <thead>
           <tr className="border-b border-border bg-surface-subtle text-micro-label uppercase text-content-tertiary h-10 select-none">
             <th className="px-3 w-10 text-center font-medium bg-surface-subtle">#</th>
-            <th className="px-3 w-[124px] font-medium bg-surface-subtle">SLA Status</th>
-            <th className="px-3 font-medium bg-surface-subtle">Ticket</th>
-            <th className="px-3 w-[84px] hidden lg:table-cell font-medium bg-surface-subtle">Agency</th>
-            <th className="px-3 w-[100px] hidden md:table-cell font-medium bg-surface-subtle">Intent</th>
-            <th className="px-3 w-[80px] font-medium bg-surface-subtle">Priority</th>
-            <th className="px-3 w-[76px] font-medium bg-surface-subtle">Status</th>
-            <th className="px-3 w-[180px] max-w-[180px] font-medium bg-surface-subtle">Dates</th>
-            <th className="px-3 w-[124px] hidden min-[1200px]:table-cell font-medium bg-surface-subtle">Assignee</th>
+            <th className="px-3 w-[145px] font-medium bg-surface-subtle">SLA Status</th>
+            <th className="px-3 min-w-[240px] font-medium bg-surface-subtle">Ticket</th>
+            <th className="px-3 w-[96px] hidden lg:table-cell font-medium bg-surface-subtle">Agency</th>
+            <th className="px-3 w-[95px] hidden md:table-cell font-medium bg-surface-subtle">Intent</th>
+            <th className="px-3 w-[75px] font-medium bg-surface-subtle">Priority</th>
+            <th className="px-3 w-[75px] font-medium bg-surface-subtle">Status</th>
+            <th className="px-3 w-[195px] max-w-[195px] font-medium bg-surface-subtle">Dates</th>
+            <th className="px-3 w-[130px] hidden min-[1200px]:table-cell font-medium bg-surface-subtle">Assignee</th>
             {isStaff && (
               <th className="px-3 w-[60px] text-right hidden min-[1280px]:table-cell font-medium bg-surface-subtle">
                 Score
@@ -348,7 +348,7 @@ export function QueueTable({
                     </td>
 
                     {/* 2. SLA Status (SlaRing + SlaBadge) */}
-                    <td className="px-3">
+                    <td className="px-3 w-[145px]">
                       <div className="flex items-center gap-1.5 whitespace-nowrap overflow-hidden">
                         <SlaRing
                           status={t.sla.status}
@@ -475,7 +475,7 @@ export function QueueTable({
                     </td>
 
                     {/* 8. Dates: compact FlightPathTimeline strip + "Check-in in 2d 4h / LCD 3 Dec" */}
-                    <td className="px-3 w-[180px] max-w-[180px] overflow-hidden">
+                    <td className="px-3 w-[195px] max-w-[195px] overflow-hidden">
                       <div className="flex flex-col justify-center text-[11px] font-mono-numbers leading-tight min-w-0 w-full max-w-full overflow-hidden">
                         <div className="truncate">
                           <span
@@ -518,12 +518,17 @@ export function QueueTable({
 
                     {/* 9. Assignee & Quick Actions */}
                     <td className="px-3 hidden min-[1200px]:table-cell relative">
-                      {/* Normal Assignee Display: avatar, or small yellow dot + "Unassigned" */}
-                      <div className="flex items-center gap-1.5 min-w-0">
+                      {/* Normal Assignee Display */}
+                      <div
+                        className={cn(
+                          "flex items-center gap-1.5 min-w-0 transition-opacity duration-120",
+                          isStaff && "group-hover:opacity-0"
+                        )}
+                      >
                         {t.assigned_to ? (
                           <>
                             <Avatar name={t.assigned_to} id={t.assigned_to} size="sm" />
-                            <span className="text-table font-medium text-content-secondary truncate max-w-[80px]">
+                            <span className="text-table font-medium text-content-secondary truncate max-w-[85px]">
                               {t.assigned_to}
                             </span>
                           </>
@@ -535,46 +540,46 @@ export function QueueTable({
                         )}
                       </div>
 
-                      {/* Quick Actions Floating Island on Hover (Staff Only): Compact icon-only pill, stays strictly inside column bounds */}
+                      {/* Quick Actions (Ghost icon buttons directly on row background: no border, no bubble, no shadow) */}
                       {isStaff && (
-                        <div className="absolute inset-y-0 right-1 flex items-center gap-0.5 opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-150 pointer-events-none group-hover:pointer-events-auto z-20 bg-surface/95 dark:bg-slate-900/95 border border-border rounded-full px-1 py-0.5 shadow-sm">
+                        <div className="absolute inset-y-0 right-2 flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-120 pointer-events-none group-hover:pointer-events-auto">
                           {!t.assigned_to && (
                             <button
                               type="button"
                               onClick={(e) => handleAssignToMe(t.id, e)}
-                              className="w-6 h-6 rounded-full flex items-center justify-center bg-surface hover:bg-brand-50 text-brand-700 hover:text-brand-800 border border-border hover:border-brand-300 shadow-xs transition-colors cursor-pointer"
+                              className="w-7 h-7 rounded-md flex items-center justify-center text-content-tertiary hover:text-brand-orange hover:bg-orange-500/10 transition-colors cursor-pointer"
                               title="Assign to me"
                               aria-label="Assign to me"
                             >
-                              <UserPlus className="w-3 h-3 text-brand-600" />
+                              <UserPlus className="w-3.5 h-3.5" />
                             </button>
                           )}
                           <button
                             type="button"
                             onClick={(e) => handleEscalate(t.id, e)}
-                            className="w-6 h-6 rounded-full flex items-center justify-center bg-surface hover:bg-amber-50 text-amber-700 hover:text-amber-800 border border-border hover:border-amber-300 shadow-xs transition-colors cursor-pointer"
+                            className="w-7 h-7 rounded-md flex items-center justify-center text-content-tertiary hover:text-amber-600 hover:bg-amber-500/10 transition-colors cursor-pointer"
                             title="Escalate ticket"
                             aria-label="Escalate ticket"
                           >
-                            <ArrowUpCircle className="w-3 h-3 text-amber-600" />
+                            <ArrowUpCircle className="w-3.5 h-3.5" />
                           </button>
                           <button
                             type="button"
                             onClick={(e) => handleCopyTboh(t.tboh_id, e)}
-                            className="w-6 h-6 rounded-full flex items-center justify-center bg-surface hover:bg-surface-subtle text-content-secondary border border-border shadow-xs transition-colors cursor-pointer"
+                            className="w-7 h-7 rounded-md flex items-center justify-center text-content-tertiary hover:text-content-primary hover:bg-surface-subtle transition-colors cursor-pointer"
                             title="Copy TBOH identifier"
                             aria-label="Copy TBOH identifier"
                           >
-                            <Copy className="w-3 h-3" />
+                            <Copy className="w-3.5 h-3.5" />
                           </button>
                           <button
                             type="button"
                             onClick={(e) => handleOpenTicket(t.id, e)}
-                            className="w-6 h-6 rounded-full flex items-center justify-center bg-brand-600 hover:bg-brand-700 text-white shadow-xs transition-colors cursor-pointer"
+                            className="w-7 h-7 rounded-md flex items-center justify-center text-content-tertiary hover:text-brand-orange hover:bg-orange-500/10 transition-colors cursor-pointer"
                             title="Open full page"
                             aria-label="Open full page"
                           >
-                            <ExternalLink className="w-3 h-3" />
+                            <ExternalLink className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       )}
