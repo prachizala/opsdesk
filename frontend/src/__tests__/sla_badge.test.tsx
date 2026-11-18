@@ -1,11 +1,19 @@
 import React from "react";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { SLABadge } from "@/components/Badge";
 import { calculateClientSla } from "@/lib/sla";
 import { SLAStatus } from "@/lib/types";
 
 describe("SLABadge and SLA Calculator", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("calculates normal client SLA with remaining hours", () => {
     const initialSla: SLAStatus = {
       status: "NORMAL",
@@ -74,21 +82,29 @@ describe("SLABadge and SLA Calculator", () => {
     const { rerender } = render(
       <SLABadge sla={{ status: "NORMAL", color: "Green", badge: "32.0h left", hours_remaining: 32 }} />
     );
-    expect(screen.getByText("32.0h left")).toBeDefined();
+    expect(screen.getByText("On track")).toBeDefined();
+    expect(screen.getByText("1d 8h")).toBeDefined();
 
     rerender(
       <SLABadge sla={{ status: "AT_RISK", color: "Amber", badge: "14.5h left", hours_remaining: 14.5 }} />
     );
-    expect(screen.getByText("14.5h left")).toBeDefined();
+    expect(screen.getByText("At risk")).toBeDefined();
+    expect(screen.getByText("14h 30m")).toBeDefined();
 
     rerender(
       <SLABadge sla={{ status: "BREACHED", color: "Red", badge: "BREACHED", hours_remaining: 0 }} />
     );
-    expect(screen.getByText("BREACHED")).toBeDefined();
+    expect(screen.getByText("Breached")).toBeDefined();
+    expect(screen.getByText("0m 0s")).toBeDefined();
 
     rerender(
       <SLABadge sla={{ status: "STOPPED", color: "Gray", badge: "CLOSED", hours_remaining: null }} />
     );
-    expect(screen.getByText("CLOSED")).toBeDefined();
+    expect(screen.getByText("Stopped")).toBeDefined();
+
+    rerender(
+      <SLABadge sla={{ status: "CLOSED", color: "Gray", badge: "CLOSED", hours_remaining: null }} />
+    );
+    expect(screen.getByText("Closed")).toBeDefined();
   });
 });

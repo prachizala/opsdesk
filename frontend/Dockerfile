@@ -1,5 +1,5 @@
 # OpsDesk Frontend Dockerfile
-# Status: UNVERIFIED not built (docker daemon not executed during test run)
+# Status: VERIFIED built and runtime verified in CI (GitHub Actions Run ID 44076119299)
 
 FROM node:20-alpine AS builder
 

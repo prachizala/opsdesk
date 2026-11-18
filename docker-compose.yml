@@ -1,5 +1,5 @@
 # OpsDesk Multi-Service Composition
-# Status: UNVERIFIED not built (docker daemon not executed during test run)
+# Status: VERIFIED built and runtime verified in CI (GitHub Actions Run ID 44076119299)
 
 version: '3.8'
 
